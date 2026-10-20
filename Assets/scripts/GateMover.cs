@@ -1,134 +1,180 @@
 using UnityEngine;
 
+/// <summary>
+/// Перемещение / поворот / масштаб ворот двумя руками (hand tracking).
+/// Жест: на обеих руках вытянут указательный, средний согнут.
+/// Поворот только вокруг вертикальной оси — ворота не заваливаются.
+/// </summary>
 public class GateMover : MonoBehaviour
 {
-    [Header("Settings")]
+    [Header("Hands (необязательно — найдутся автоматически)")]
+    public OVRHand leftHand;
+    public OVRHand rightHand;
+
+    [Header("Gesture")]
+    [Tooltip("Pinch strength указательного ниже порога = палец вытянут")]
+    public float indexExtendedThreshold = 0.3f;
+    [Tooltip("Pinch strength среднего выше порога = палец согнут")]
+    public float middleCurledThreshold = 0.3f;
+    [Tooltip("Сколько секунд жест должен удерживаться, чтобы включиться")]
+    public float gestureHoldTime = 0.15f;
+
+    [Header("Transform")]
+    public bool allowMove = true;
+    [Tooltip("Разрешить двигать по высоте (выкл. — ворота остаются на полу)")]
+    public bool allowVertical = true;
+    public bool allowRotate = true;
+    [Tooltip("Для примерки 1:1 масштаб лучше выключить")]
+    public bool allowScale = true;
     public float minScale = 0.1f;
     public float maxScale = 5f;
 
-    [Tooltip("Порог pinch strength ниже которого палец считается вытянутым")]
-    public float indexExtendedThreshold = 0.3f;
+    [Header("Smoothing")]
+    [Range(0f, 0.95f)]
+    [Tooltip("0 — без сглаживания, ближе к 1 — плавнее, но с задержкой")]
+    public float smoothing = 0.5f;
 
-    private OVRHand _leftHand;
-    private OVRHand _rightHand;
+    [Header("Debug")]
+    public bool debugLogs = false;
 
-    private bool _isTwoHandActive = false;
-    private Vector3 _prevMidpoint;
-    private float _prevHandDistance;
-    private Quaternion _prevHandRotation;
+    const float HandSearchInterval = 0.5f;
+
+    bool _active;
+    float _gestureTimer;
+    float _nextHandSearch;
+
+    Vector3 _prevMid;
+    float _prevDist;
+    float _prevYaw;
+
+    Vector3 _smoothL, _smoothR;
+    bool _smoothInit;
 
     void Update()
     {
-        FindHands();
+        if (!EnsureHands()) { Deactivate(); return; }
 
-        bool leftIndexExtended = IsIndexExtended(_leftHand);
-        bool rightIndexExtended = IsIndexExtended(_rightHand);
-        bool twoHandActive = leftIndexExtended && rightIndexExtended;
+        bool gesture = IsPointing(leftHand) && IsPointing(rightHand);
+        _gestureTimer = gesture ? _gestureTimer + Time.deltaTime : 0f;
 
-        if (Time.frameCount % 60 == 0)
-            Debug.Log($"GateMover: leftExtended={leftIndexExtended} rightExtended={rightIndexExtended}");
+        if (!_active && _gestureTimer >= gestureHoldTime) Activate();
+        else if (_active && !gesture) Deactivate();
 
-        if (twoHandActive && !_isTwoHandActive)
-        {
-            StartTwoHand();
-        }
-        else if (!twoHandActive && _isTwoHandActive)
-        {
-            _isTwoHandActive = false;
-            Debug.Log("GateMover: END");
-        }
-
-        if (_isTwoHandActive && twoHandActive)
-        {
-            UpdateTwoHand();
-        }
+        if (_active) Apply();
     }
 
-    void FindHands()
+    // ---------- hands ----------
+
+    bool EnsureHands()
     {
-        _leftHand = null;
-        _rightHand = null;
+        if (leftHand != null && rightHand != null) return true;
+        if (Time.time < _nextHandSearch) return false;
+        _nextHandSearch = Time.time + HandSearchInterval;
 
         foreach (var hand in FindObjectsByType<OVRHand>(FindObjectsSortMode.None))
         {
-            string n = hand.gameObject.name.ToLower();
-            if (n.Contains("left")) _leftHand = hand;
-            else if (n.Contains("right")) _rightHand = hand;
+            bool? isLeft = IsLeft(hand);
+            if (isLeft == true && leftHand == null) leftHand = hand;
+            else if (isLeft == false && rightHand == null) rightHand = hand;
         }
+        if (debugLogs) Debug.Log($"GateMover: hands L={leftHand?.name} R={rightHand?.name}");
+        return leftHand != null && rightHand != null;
     }
 
-    bool IsIndexExtended(OVRHand hand)
+    static bool? IsLeft(OVRHand hand)
     {
-        if (hand == null) return false;
-
-        // Указательный вытянут = низкий pinch strength у указательного
-        // и хотя бы один другой палец согнут (средний pinching)
-        float indexStrength = hand.GetFingerPinchStrength(OVRHand.HandFinger.Index);
-        float middleStrength = hand.GetFingerPinchStrength(OVRHand.HandFinger.Middle);
-
-        if (Time.frameCount % 60 == 0)
-            Debug.Log($"  {hand.name}: index={indexStrength:F2} middle={middleStrength:F2}");
-
-        // Указательный НЕ щипает + средний согнут (рука не просто открыта)
-        return indexStrength < indexExtendedThreshold && middleStrength > 0.3f;
-    }
-
-    void StartTwoHand()
-    {
-        _isTwoHandActive = true;
-        _prevMidpoint = GetMidpoint();
-        _prevHandDistance = GetHandDistance();
-        _prevHandRotation = GetHandRotation();
-        Debug.Log("GateMover: START");
-    }
-
-    void UpdateTwoHand()
-    {
-        Vector3 currentMidpoint = GetMidpoint();
-        float currentDistance = GetHandDistance();
-        Quaternion currentRotation = GetHandRotation();
-
-        // Позиция
-        transform.position += currentMidpoint - _prevMidpoint;
-
-        // Поворот
-        Quaternion rotationDelta = currentRotation * Quaternion.Inverse(_prevHandRotation);
-        transform.rotation = rotationDelta * transform.rotation;
-
-        // Масштаб
-        if (_prevHandDistance > 0.001f)
+        var skeleton = hand.GetComponent<OVRSkeleton>();
+        if (skeleton != null)
         {
-            float multiplier = currentDistance / _prevHandDistance;
-            float newScale = Mathf.Clamp(
-                transform.localScale.x * multiplier,
-                minScale,
-                maxScale
-            );
-            transform.localScale = Vector3.one * newScale;
+            string t = skeleton.GetSkeletonType().ToString();
+            if (t.Contains("Left")) return true;
+            if (t.Contains("Right")) return false;
+        }
+        string n = hand.name.ToLowerInvariant();
+        if (n.Contains("left")) return true;
+        if (n.Contains("right")) return false;
+        return null;
+    }
+
+    bool IsPointing(OVRHand hand)
+    {
+        if (!hand.IsTracked || !hand.IsDataHighConfidence) return false;
+        float index = hand.GetFingerPinchStrength(OVRHand.HandFinger.Index);
+        float middle = hand.GetFingerPinchStrength(OVRHand.HandFinger.Middle);
+        return index < indexExtendedThreshold && middle > middleCurledThreshold;
+    }
+
+    // ---------- manipulation ----------
+
+    void Activate()
+    {
+        _active = true;
+        _smoothInit = false;
+        SampleHands(out var l, out var r);
+        _prevMid = (l + r) * 0.5f;
+        _prevDist = Vector3.Distance(l, r);
+        _prevYaw = Yaw(l, r);
+        if (debugLogs) Debug.Log("GateMover: START");
+    }
+
+    void Deactivate()
+    {
+        if (_active && debugLogs) Debug.Log("GateMover: END");
+        _active = false;
+        _gestureTimer = 0f;
+    }
+
+    void Apply()
+    {
+        SampleHands(out var l, out var r);
+        Vector3 mid = (l + r) * 0.5f;
+        float dist = Vector3.Distance(l, r);
+        float yaw = Yaw(l, r);
+
+        if (allowMove)
+        {
+            Vector3 delta = mid - _prevMid;
+            if (!allowVertical) delta.y = 0f;
+            transform.position += delta;
         }
 
-        _prevMidpoint = currentMidpoint;
-        _prevHandDistance = currentDistance;
-        _prevHandRotation = currentRotation;
+        if (allowRotate)
+        {
+            float dYaw = Mathf.DeltaAngle(_prevYaw, yaw);
+            transform.RotateAround(mid, Vector3.up, dYaw);
+        }
+
+        if (allowScale && _prevDist > 0.01f)
+        {
+            float s = Mathf.Clamp(transform.localScale.x * (dist / _prevDist), minScale, maxScale);
+            transform.localScale = Vector3.one * s;
+        }
+
+        _prevMid = mid;
+        _prevDist = dist;
+        _prevYaw = yaw;
     }
 
-    Vector3 GetMidpoint()
+    void SampleHands(out Vector3 l, out Vector3 r)
     {
-        return (_leftHand.transform.position + _rightHand.transform.position) * 0.5f;
+        Vector3 rawL = leftHand.transform.position;
+        Vector3 rawR = rightHand.transform.position;
+        if (!_smoothInit || smoothing <= 0f)
+        {
+            _smoothL = rawL; _smoothR = rawR; _smoothInit = true;
+        }
+        else
+        {
+            float k = 1f - smoothing;
+            _smoothL = Vector3.Lerp(_smoothL, rawL, k);
+            _smoothR = Vector3.Lerp(_smoothR, rawR, k);
+        }
+        l = _smoothL; r = _smoothR;
     }
 
-    float GetHandDistance()
+    static float Yaw(Vector3 l, Vector3 r)
     {
-        return Vector3.Distance(
-            _leftHand.transform.position,
-            _rightHand.transform.position
-        );
-    }
-
-    Quaternion GetHandRotation()
-    {
-        Vector3 dir = (_rightHand.transform.position - _leftHand.transform.position).normalized;
-        if (dir == Vector3.zero) return Quaternion.identity;
-        return Quaternion.LookRotation(dir, Vector3.up);
+        Vector3 d = r - l;
+        return Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg;
     }
 }
