@@ -6,8 +6,9 @@ using UnityEngine;
 /// Смена цвета полотна ворот через меню на левой ладони.
 ///  • Повернуть левую ладонь к лицу — над ней появляется палитра (плитки с материалами панелей).
 ///  • Ткнуть в плитку указательным пальцем правой руки — лицевые панели ворот получают этот материал.
-/// Палитра — список swatches: RAL задаются цветом (sRGB), дерево — материалом из модели
-/// (ищется по имени среди материалов ворот, в т.ч. на «держателе» Sphere).
+/// Палитра — список palette: полотно получает текстурный материал из модели (materialName,
+/// ищется среди материалов ворот, в т.ч. на «держателе» Sphere), а плитка меню показывает
+/// точный цвет RAL (tileColor) — текстуры на маленькой плитке передают цвет неверно.
 /// Цели — все рендереры ворот со слотом материала targetMaterialName.
 /// </summary>
 public class GateColorPicker : MonoBehaviour
@@ -16,39 +17,39 @@ public class GateColorPicker : MonoBehaviour
     public class Swatch
     {
         public string label;
-        [Tooltip("Цвет RAL в sRGB (для текстурных материалов не используется)")]
-        public Color color = Color.white;
-        [Tooltip("Если задано — берётся материал модели с этим именем (дерево и т.п.), цвет игнорируется")]
+        [Tooltip("Материал модели, который получает полотно (имя без \" (Instance)\")")]
         public string materialName;
-        [Tooltip("Матовая структура «мороз»")]
-        public bool frost;
+        [Tooltip("Цвет плитки в меню (RAL, sRGB)")]
+        public Color tileColor = Color.white;
+        [Tooltip("Показать на плитке саму текстуру материала (для дерева)")]
+        public bool tileUsesTexture;
 
-        public Swatch(string label, string hex, bool frost = false, string materialName = null)
+        public Swatch(string label, string materialName, string hex, bool tileUsesTexture = false)
         {
             this.label = label;
-            ColorUtility.TryParseHtmlString(hex, out color);
-            this.frost = frost;
             this.materialName = materialName;
+            ColorUtility.TryParseHtmlString(hex, out tileColor);
+            this.tileUsesTexture = tileUsesTexture;
         }
     }
 
     [Header("Palette")]
-    [Tooltip("Справочные sRGB-значения RAL Classic — при необходимости сверить с каталогом производителя")]
-    public List<Swatch> swatches = new List<Swatch>
+    [Tooltip("Цвета плиток — справочные sRGB-значения RAL Classic; полотно красится материалами модели")]
+    public List<Swatch> palette = new List<Swatch>
     {
-        new Swatch("RAL 9003", "#F4F4F4"),
-        new Swatch("RAL 9006", "#A5A5A5"),
-        new Swatch("RAL 7004", "#969992"),
-        new Swatch("RAL 7016", "#293133"),
-        new Swatch("RAL 7016\nмороз", "#293133", true),
-        new Swatch("RAL 8017", "#45322E"),
-        new Swatch("RAL 8017\nмороз", "#45322E", true),
-        new Swatch("RAL 3005", "#5E2129"),
-        new Swatch("RAL 6005", "#2F4538"),
-        new Swatch("RAL 5005", "#154889"),
-        new Swatch("RAL 1014", "#DDC49A"),
-        new Swatch("Золотой дуб", "#FFFFFF", false, "панель_золотой дуб"),
-        new Swatch("Венге", "#FFFFFF", false, "панель_венге"),
+        new Swatch("RAL 9003", "панель_белый RAL 9003", "#F4F4F4"),
+        new Swatch("RAL 9006", "панель_серебро RAL 9006", "#A5A5A5"),
+        new Swatch("RAL 7004", "панель_серый RAL 7004", "#969992"),
+        new Swatch("RAL 7016", "панель_антрацит RAL 7016", "#293133"),
+        new Swatch("RAL 7016\nмороз", "RAL 7016 мороз", "#293133"),
+        new Swatch("RAL 8017", "панель_коричнево-красный RAL 8017", "#45322E"),
+        new Swatch("RAL 8017\nмороз", "панель_коричнево-красный(мороз) RAL", "#45322E"),
+        new Swatch("RAL 3005", "панель_бордовый RAL 3005", "#5E2129"),
+        new Swatch("RAL 6005", "панель_зеленый RAL 6005", "#2F4538"),
+        new Swatch("RAL 5005", "панель_синий RAL 5005", "#154889"),
+        new Swatch("RAL 1014", "панель_бежевый RAL 1014", "#DDC49A"),
+        new Swatch("Золотой дуб", "панель_золотой дуб", "#FFFFFF", true),
+        new Swatch("Венге", "панель_венге", "#FFFFFF", true),
     };
     [Tooltip("Материал лицевой стороны полотна, который заменяем")]
     public string targetMaterialName = "базовый цвет";
@@ -128,26 +129,19 @@ public class GateColorPicker : MonoBehaviour
         }
         if (_targets.Count == 0) { Debug.LogWarning($"GateColorPicker: не найдено рендереров с материалом '{targetMaterialName}'", this); return; }
 
-        foreach (var sw in swatches)
+        foreach (var sw in palette)
         {
-            var e = new Entry { label = sw.label.Replace("\\n", "\n") };
-            if (!string.IsNullOrEmpty(sw.materialName))
+            if (!byName.TryGetValue(CleanName(sw.materialName ?? ""), out var gateMat))
             {
-                if (!byName.TryGetValue(sw.materialName, out e.gate))
-                {
-                    Debug.LogWarning($"GateColorPicker: материал '{sw.materialName}' не найден в модели", this);
-                    continue;
-                }
-                e.tile = e.gate;
+                Debug.LogWarning($"GateColorPicker: материал '{sw.materialName}' не найден в модели — плитка '{sw.label}' пропущена", this);
+                continue;
             }
-            else
+            _palette.Add(new Entry
             {
-                e.gate = new Material(baseMat) { name = "Gate_" + sw.label };
-                SetColor(e.gate, sw.color);
-                SetRoughness(e.gate, sw.frost ? 0.95f : 0.55f);
-                e.tile = TileMaterial(sw.color);
-            }
-            _palette.Add(e);
+                label = sw.label.Replace("\\n", "\n"),
+                gate = gateMat,
+                tile = sw.tileUsesTexture ? gateMat : TileMaterial(sw.tileColor),
+            });
         }
         if (debugLogs) Debug.Log($"GateColorPicker: palette={_palette.Count} targets={_targets.Count} base={baseMat.shader.name}");
     }
@@ -158,14 +152,6 @@ public class GateColorPicker : MonoBehaviour
         if (m.HasProperty("baseColorFactor")) m.SetColor("baseColorFactor", c);
         if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
         if (m.HasProperty("_Color")) m.SetColor("_Color", c);
-    }
-
-    static void SetRoughness(Material m, float roughness)
-    {
-        if (m.HasProperty("roughnessFactor")) m.SetFloat("roughnessFactor", roughness);
-        if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 1f - roughness);
-        if (m.HasProperty("metallicFactor")) m.SetFloat("metallicFactor", 0f);
-        if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
     }
 
     // Плитка — неосвещённый образец точного цвета
