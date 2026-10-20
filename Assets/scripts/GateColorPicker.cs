@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
 
@@ -7,16 +6,50 @@ using UnityEngine;
 /// Смена цвета полотна ворот через меню на левой ладони.
 ///  • Повернуть левую ладонь к лицу — над ней появляется палитра (плитки с материалами панелей).
 ///  • Ткнуть в плитку указательным пальцем правой руки — лицевые панели ворот получают этот материал.
-/// Палитра берётся из материалов объекта-«держателя» в модели (по умолчанию Sphere, на нём все RAL/дерево),
-/// цели — все рендереры ворот со слотом материала targetMaterialName.
+/// Палитра — список swatches: RAL задаются цветом (sRGB), дерево — материалом из модели
+/// (ищется по имени среди материалов ворот, в т.ч. на «держателе» Sphere).
+/// Цели — все рендереры ворот со слотом материала targetMaterialName.
 /// </summary>
 public class GateColorPicker : MonoBehaviour
 {
-    [Header("Materials")]
-    [Tooltip("Объект в модели, на котором висят все материалы панелей (палитра)")]
-    public string paletteHolderName = "Sphere";
-    [Tooltip("В палитру попадают материалы, имя которых содержит одну из подстрок")]
-    public string[] paletteFilters = { "панель_", "RAL" };
+    [System.Serializable]
+    public class Swatch
+    {
+        public string label;
+        [Tooltip("Цвет RAL в sRGB (для текстурных материалов не используется)")]
+        public Color color = Color.white;
+        [Tooltip("Если задано — берётся материал модели с этим именем (дерево и т.п.), цвет игнорируется")]
+        public string materialName;
+        [Tooltip("Матовая структура «мороз»")]
+        public bool frost;
+
+        public Swatch(string label, string hex, bool frost = false, string materialName = null)
+        {
+            this.label = label;
+            ColorUtility.TryParseHtmlString(hex, out color);
+            this.frost = frost;
+            this.materialName = materialName;
+        }
+    }
+
+    [Header("Palette")]
+    [Tooltip("Справочные sRGB-значения RAL Classic — при необходимости сверить с каталогом производителя")]
+    public List<Swatch> swatches = new List<Swatch>
+    {
+        new Swatch("RAL 9003", "#F4F4F4"),
+        new Swatch("RAL 9006", "#A5A5A5"),
+        new Swatch("RAL 7004", "#969992"),
+        new Swatch("RAL 7016", "#293133"),
+        new Swatch("RAL 7016\nмороз", "#293133", true),
+        new Swatch("RAL 8017", "#45322E"),
+        new Swatch("RAL 8017\nмороз", "#45322E", true),
+        new Swatch("RAL 3005", "#5E2129"),
+        new Swatch("RAL 6005", "#2F4538"),
+        new Swatch("RAL 5005", "#154889"),
+        new Swatch("RAL 1014", "#DDC49A"),
+        new Swatch("Золотой дуб", "#FFFFFF", false, "панель_золотой дуб"),
+        new Swatch("Венге", "#FFFFFF", false, "панель_венге"),
+    };
     [Tooltip("Материал лицевой стороны полотна, который заменяем")]
     public string targetMaterialName = "базовый цвет";
 
@@ -54,7 +87,8 @@ public class GateColorPicker : MonoBehaviour
     readonly HandRef _left = new HandRef();
     readonly HandRef _right = new HandRef();
 
-    readonly List<Material> _palette = new List<Material>();
+    class Entry { public string label; public Material gate; public Material tile; }
+    readonly List<Entry> _palette = new List<Entry>();
     readonly List<(Renderer r, int slot)> _targets = new List<(Renderer, int)>();
 
     Transform _head;
@@ -79,46 +113,77 @@ public class GateColorPicker : MonoBehaviour
 
     void CollectMaterials()
     {
+        var byName = new Dictionary<string, Material>();
+        Material baseMat = null;
         foreach (var r in GetComponentsInChildren<Renderer>(true))
         {
             var mats = r.sharedMaterials;
-            if (r.name == paletteHolderName)
-            {
-                foreach (var m in mats)
-                    if (m != null && MatchesPalette(m.name) && !_palette.Contains(m)) _palette.Add(m);
-                continue;
-            }
             for (int i = 0; i < mats.Length; i++)
-                if (mats[i] != null && CleanName(mats[i].name) == targetMaterialName) _targets.Add((r, i));
+            {
+                if (mats[i] == null) continue;
+                string n = CleanName(mats[i].name);
+                byName[n] = mats[i];
+                if (n == targetMaterialName) { _targets.Add((r, i)); if (baseMat == null) baseMat = mats[i]; }
+            }
         }
-        _palette.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
-        if (_palette.Count == 0) Debug.LogWarning($"GateColorPicker: палитра пуста — нет материалов на '{paletteHolderName}'", this);
-        if (_targets.Count == 0) Debug.LogWarning($"GateColorPicker: не найдено рендереров с материалом '{targetMaterialName}'", this);
-        if (debugLogs) Debug.Log($"GateColorPicker: palette={_palette.Count} targets={_targets.Count}");
+        if (_targets.Count == 0) { Debug.LogWarning($"GateColorPicker: не найдено рендереров с материалом '{targetMaterialName}'", this); return; }
+
+        foreach (var sw in swatches)
+        {
+            var e = new Entry { label = sw.label.Replace("\\n", "\n") };
+            if (!string.IsNullOrEmpty(sw.materialName))
+            {
+                if (!byName.TryGetValue(sw.materialName, out e.gate))
+                {
+                    Debug.LogWarning($"GateColorPicker: материал '{sw.materialName}' не найден в модели", this);
+                    continue;
+                }
+                e.tile = e.gate;
+            }
+            else
+            {
+                e.gate = new Material(baseMat) { name = "Gate_" + sw.label };
+                SetColor(e.gate, sw.color);
+                SetRoughness(e.gate, sw.frost ? 0.95f : 0.55f);
+                e.tile = TileMaterial(sw.color);
+            }
+            _palette.Add(e);
+        }
+        if (debugLogs) Debug.Log($"GateColorPicker: palette={_palette.Count} targets={_targets.Count} base={baseMat.shader.name}");
     }
 
-    bool MatchesPalette(string n)
+    // glTFast-шейдеры: baseColorFactor / roughnessFactor; URP Lit: _BaseColor / _Smoothness
+    static void SetColor(Material m, Color c)
     {
-        foreach (var f in paletteFilters) if (n.Contains(f)) return true;
-        return false;
+        if (m.HasProperty("baseColorFactor")) m.SetColor("baseColorFactor", c);
+        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+        if (m.HasProperty("_Color")) m.SetColor("_Color", c);
+    }
+
+    static void SetRoughness(Material m, float roughness)
+    {
+        if (m.HasProperty("roughnessFactor")) m.SetFloat("roughnessFactor", roughness);
+        if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 1f - roughness);
+        if (m.HasProperty("metallicFactor")) m.SetFloat("metallicFactor", 0f);
+        if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
+    }
+
+    // Плитка — неосвещённый образец точного цвета
+    Material TileMaterial(Color c)
+    {
+        Material m = backgroundMaterial != null ? new Material(backgroundMaterial)
+                   : Shader.Find("Universal Render Pipeline/Unlit") is Shader sh ? new Material(sh) : null;
+        if (m != null) SetColor(m, c);
+        return m;
     }
 
     // Unity может добавить " (Instance)" к имени материала
     static string CleanName(string n) => n.Replace(" (Instance)", "").Trim();
 
-    static string Label(string matName)
-    {
-        string n = CleanName(matName).Replace("панель_", "");
-        bool frost = n.Contains("мороз");
-        var ral = Regex.Match(n, @"RAL\s*\d{4}");
-        if (ral.Success) return ral.Value + (frost ? "\nмороз" : "");
-        return n.Replace("(", " (").Replace("  ", " ").Replace(" RAL", "").Trim();
-    }
-
     public void Apply(int index)
     {
         if (index < 0 || index >= _palette.Count) return;
-        var mat = _palette[index];
+        var mat = _palette[index].gate;
         foreach (var (r, slot) in _targets)
         {
             var mats = r.sharedMaterials;
@@ -127,7 +192,7 @@ public class GateColorPicker : MonoBehaviour
         }
         _selected = index;
         UpdateHighlight();
-        if (debugLogs) Debug.Log($"GateColorPicker: applied {mat.name}");
+        if (debugLogs) Debug.Log($"GateColorPicker: applied {_palette[index].label}");
     }
 
     // ---------- menu ----------
@@ -166,10 +231,10 @@ public class GateColorPicker : MonoBehaviour
             tile.SetParent(_menu, false);
             tile.localPosition = new Vector3(x, y, 0);
             tile.localScale = new Vector3(tileSize, tileSize, 1f);
-            tile.GetComponent<Renderer>().sharedMaterial = _palette[i];
+            if (_palette[i].tile != null) tile.GetComponent<Renderer>().sharedMaterial = _palette[i].tile;
             _tiles.Add(tile);
 
-            var label = Text("Label_" + i, _menu, Label(_palette[i].name), step, labelH);
+            var label = Text("Label_" + i, _menu, _palette[i].label, step * 0.95f, labelH);
             label.localPosition = new Vector3(x, y - tileSize * 0.5f - labelH * 0.5f, 0);
         }
     }

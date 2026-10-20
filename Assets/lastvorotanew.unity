@@ -27754,10 +27754,60 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46521a982bbaf3d419014a1675b4e928, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GateColorPicker
-  paletteHolderName: Sphere
-  paletteFilters:
-  - "\u043F\u0430\u043D\u0435\u043B\u044C_"
-  - RAL
+  swatches:
+  - label: RAL 9003
+    color: {r: 0.95686275, g: 0.95686275, b: 0.95686275, a: 1}
+    materialName: 
+    frost: 0
+  - label: RAL 9006
+    color: {r: 0.64705884, g: 0.64705884, b: 0.64705884, a: 1}
+    materialName: 
+    frost: 0
+  - label: RAL 7004
+    color: {r: 0.5882353, g: 0.6, b: 0.57254905, a: 1}
+    materialName: 
+    frost: 0
+  - label: RAL 7016
+    color: {r: 0.16078432, g: 0.19215687, b: 0.2, a: 1}
+    materialName: 
+    frost: 0
+  - label: "RAL 7016\n\u043C\u043E\u0440\u043E\u0437"
+    color: {r: 0.16078432, g: 0.19215687, b: 0.2, a: 1}
+    materialName: 
+    frost: 1
+  - label: RAL 8017
+    color: {r: 0.27058825, g: 0.19607843, b: 0.18039216, a: 1}
+    materialName: 
+    frost: 0
+  - label: "RAL 8017\n\u043C\u043E\u0440\u043E\u0437"
+    color: {r: 0.27058825, g: 0.19607843, b: 0.18039216, a: 1}
+    materialName: 
+    frost: 1
+  - label: RAL 3005
+    color: {r: 0.36862746, g: 0.12941177, b: 0.16078432, a: 1}
+    materialName: 
+    frost: 0
+  - label: RAL 6005
+    color: {r: 0.18431373, g: 0.27058825, b: 0.21960784, a: 1}
+    materialName: 
+    frost: 0
+  - label: RAL 5005
+    color: {r: 0.08235294, g: 0.28235295, b: 0.5372549, a: 1}
+    materialName: 
+    frost: 0
+  - label: RAL 1014
+    color: {r: 0.8666667, g: 0.76862746, b: 0.6039216, a: 1}
+    materialName: 
+    frost: 0
+  - label: "\u0417\u043E\u043B\u043E\u0442\u043E\u0439 \u0434\u0443\u0431"
+    color: {r: 1, g: 1, b: 1, a: 1}
+    materialName: "\u043F\u0430\u043D\u0435\u043B\u044C_\u0437\u043E\u043B\u043E\u0442\u043E\u0439
+      \u0434\u0443\u0431"
+    frost: 0
+  - label: "\u0412\u0435\u043D\u0433\u0435"
+    color: {r: 1, g: 1, b: 1, a: 1}
+    materialName: "\u043F\u0430\u043D\u0435\u043B\u044C_\u0432\u0435\u043D\u0433\u0435"
+    frost: 0
   targetMaterialName: "\u0431\u0430\u0437\u043E\u0432\u044B\u0439 \u0446\u0432\u0435\u0442"
   backgroundMaterial: {fileID: 2100000, guid: 55f24d2e74cd61f42b6d8aa88e840368, type: 2}
   highlightMaterial: {fileID: 2100000, guid: e982969cac2564446a18e669d7b56039, type: 2}
