@@ -27894,6 +27894,8 @@ MonoBehaviour:
   handleHandGrab: {fileID: 7229121986100686386}
   animationClipName: Animation
   openHandTravelY: 2.3
+  maxProgress: 0.98
+  debugLogs: 0
 --- !u!114 &7685820126626308159
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -27901,14 +27903,24 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6533024917476223039}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 50474c88f8608884b934c6934489fa6c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GateMover
+  leftHand: {fileID: 0}
+  rightHand: {fileID: 0}
+  indexExtendedThreshold: 0.3
+  middleCurledThreshold: 0.3
+  gestureHoldTime: 0.15
+  allowMove: 1
+  allowVertical: 1
+  allowRotate: 1
+  allowScale: 1
   minScale: 0.1
   maxScale: 3
-  indexExtendedThreshold: 0.3
+  smoothing: 0.5
+  debugLogs: 0
 --- !u!4 &7708621622733092611
 Transform:
   m_ObjectHideFlags: 0
