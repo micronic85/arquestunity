@@ -33,6 +33,8 @@
 
 ## Правила работы
 - Git в корне проекта; коммитить после каждой логической правки. Library/Temp/Logs/APK в .gitignore.
+- Remote: origin → https://github.com/micronic85/arquestunity (ветка main). Push делается с Windows
+  (Git Credential Manager, как в D:\sites\tervorota) — у Claude в shell нет доступа к GitHub-учётке.
 - После правки скриптов: Assets/Refresh (если удаляли файлы) → recompile → проверить консоль.
 - Проверка на устройстве — только в шлеме, Claude этого сделать не может.
 

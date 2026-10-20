@@ -37,3 +37,8 @@ UpgradeLog.htm
 sysinfo.txt
 crashlytics-build.properties
 *.tmp
+
+# Unity crash recovery / test runner artifacts
+/[Aa]ssets/_Recovery/
+/[Aa]ssets/_Recovery.meta
+/[Aa]ssets/Resources/PerformanceTestRun*
