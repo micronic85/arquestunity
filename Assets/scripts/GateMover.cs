@@ -1,28 +1,32 @@
 using UnityEngine;
 
 /// <summary>
-/// Перемещение / поворот / масштаб ворот двумя руками (hand tracking).
-/// Жест: на обеих руках вытянут указательный, средний согнут.
-/// Поворот только вокруг вертикальной оси — ворота не заваливаются.
+/// Манипуляция воротами двумя руками (hand tracking).
+///  • Два кулака    — перенос + поворот вокруг вертикали (масштаб не меняется).
+///  • Два указательных (остальные пальцы согнуты) — масштаб вокруг середины между руками (если allowScale).
+/// Жесты определяются по костям OVRSkeleton (работает и для OVR-, и для OpenXR-скелета).
+/// Пока ручку ворот держат (GateController), манипуляция отключена.
 /// </summary>
 public class GateMover : MonoBehaviour
 {
     [Header("Hands (необязательно — найдутся автоматически)")]
     public OVRHand leftHand;
     public OVRHand rightHand;
+    [Tooltip("Если задан — пока держат ручку, ворота не двигаются")]
+    public GateController gateController;
 
     [Header("Gesture")]
-    [Tooltip("Pinch strength указательного ниже порога = палец вытянут")]
-    public float indexExtendedThreshold = 0.3f;
-    [Tooltip("Pinch strength среднего выше порога = палец согнут")]
-    public float middleCurledThreshold = 0.3f;
+    [Tooltip("Палец согнут, если (кончик→запястье) / (костяшка→запястье) меньше порога")]
+    public float curledRatio = 1.35f;
+    [Tooltip("Палец вытянут, если отношение больше порога")]
+    public float extendedRatio = 1.7f;
     [Tooltip("Сколько секунд жест должен удерживаться, чтобы включиться")]
     public float gestureHoldTime = 0.15f;
 
     [Header("Transform")]
     public bool allowMove = true;
     [Tooltip("Разрешить двигать по высоте (выкл. — ворота остаются на полу)")]
-    public bool allowVertical = true;
+    public bool allowVertical = false;
     public bool allowRotate = true;
     [Tooltip("Для примерки 1:1 масштаб лучше выключить")]
     public bool allowScale = true;
@@ -37,9 +41,22 @@ public class GateMover : MonoBehaviour
     [Header("Debug")]
     public bool debugLogs = false;
 
+    enum Mode { None, Move, Scale }
+
     const float HandSearchInterval = 0.5f;
 
-    bool _active;
+    class HandBones
+    {
+        public OVRSkeleton skeleton;
+        public Transform wrist, knuckle, indexTip, middleTip, ringTip, pinkyTip;
+        public bool Ready => wrist && knuckle && indexTip && middleTip && ringTip && pinkyTip;
+    }
+
+    readonly HandBones _l = new HandBones();
+    readonly HandBones _r = new HandBones();
+
+    Mode _mode = Mode.None;
+    Mode _candidate = Mode.None;
     float _gestureTimer;
     float _nextHandSearch;
 
@@ -50,18 +67,28 @@ public class GateMover : MonoBehaviour
     Vector3 _smoothL, _smoothR;
     bool _smoothInit;
 
+    void Awake()
+    {
+        if (gateController == null) gateController = GetComponent<GateController>();
+    }
+
     void Update()
     {
-        if (!EnsureHands()) { Deactivate(); return; }
+        if (!EnsureHands() || !EnsureBones(leftHand, _l) || !EnsureBones(rightHand, _r)) { SetMode(Mode.None); return; }
 
-        bool gesture = IsPointing(leftHand) && IsPointing(rightHand);
-        _gestureTimer = gesture ? _gestureTimer + Time.deltaTime : 0f;
+        Mode gesture = DetectGesture();
+        if (HandleGrabbed()) gesture = Mode.None;
 
-        if (!_active && _gestureTimer >= gestureHoldTime) Activate();
-        else if (_active && !gesture) Deactivate();
+        if (gesture != _candidate) { _candidate = gesture; _gestureTimer = 0f; }
+        else _gestureTimer += Time.deltaTime;
 
-        if (_active) Apply();
+        if (gesture == Mode.None) SetMode(Mode.None);
+        else if (gesture != _mode && _gestureTimer >= gestureHoldTime) SetMode(gesture);
+
+        if (_mode != Mode.None) Apply();
     }
+
+    bool HandleGrabbed() => gateController != null && gateController.IsHandleGrabbed;
 
     // ---------- hands ----------
 
@@ -96,32 +123,73 @@ public class GateMover : MonoBehaviour
         return null;
     }
 
-    bool IsPointing(OVRHand hand)
+    bool EnsureBones(OVRHand hand, HandBones b)
     {
-        if (!hand.IsTracked || !hand.IsDataHighConfidence) return false;
-        float index = hand.GetFingerPinchStrength(OVRHand.HandFinger.Index);
-        float middle = hand.GetFingerPinchStrength(OVRHand.HandFinger.Middle);
-        return index < indexExtendedThreshold && middle > middleCurledThreshold;
+        if (b.Ready) return true;
+        if (b.skeleton == null) b.skeleton = hand.GetComponent<OVRSkeleton>();
+        if (b.skeleton == null || !b.skeleton.IsInitialized || b.skeleton.Bones == null) return false;
+
+        // Имена костей: OVR-скелет (Hand_*) или OpenXR-скелет (XRHand_*)
+        foreach (var bone in b.skeleton.Bones)
+        {
+            if (bone?.Transform == null) continue;
+            switch (bone.Transform.name)
+            {
+                case "Hand_WristRoot": case "XRHand_Wrist": b.wrist = bone.Transform; break;
+                case "Hand_Middle1": case "XRHand_MiddleProximal": b.knuckle = bone.Transform; break;
+                case "Hand_IndexTip": case "XRHand_IndexTip": b.indexTip = bone.Transform; break;
+                case "Hand_MiddleTip": case "XRHand_MiddleTip": b.middleTip = bone.Transform; break;
+                case "Hand_RingTip": case "XRHand_RingTip": b.ringTip = bone.Transform; break;
+                case "Hand_PinkyTip": case "XRHand_LittleTip": b.pinkyTip = bone.Transform; break;
+            }
+        }
+        if (debugLogs) Debug.Log($"GateMover: bones {hand.name} ready={b.Ready}");
+        return b.Ready;
+    }
+
+    bool Tracked(OVRHand hand, HandBones b) =>
+        hand.IsTracked && hand.IsDataHighConfidence && b.skeleton.IsDataValid;
+
+    float Ratio(HandBones b, Transform tip)
+    {
+        Vector3 w = b.wrist.position;
+        float baseLen = Vector3.Distance(b.knuckle.position, w);
+        return baseLen > 0.001f ? Vector3.Distance(tip.position, w) / baseLen : 99f;
+    }
+
+    bool Curled(HandBones b, Transform tip) => Ratio(b, tip) < curledRatio;
+    bool Extended(HandBones b, Transform tip) => Ratio(b, tip) > extendedRatio;
+
+    bool IsFist(HandBones b) =>
+        Curled(b, b.indexTip) && Curled(b, b.middleTip) && Curled(b, b.ringTip) && Curled(b, b.pinkyTip);
+
+    bool IsPointing(HandBones b) =>
+        Extended(b, b.indexTip) && Curled(b, b.middleTip) && Curled(b, b.ringTip) && Curled(b, b.pinkyTip);
+
+    Mode DetectGesture()
+    {
+        if (!Tracked(leftHand, _l) || !Tracked(rightHand, _r)) return Mode.None;
+        if (allowMove || allowRotate)
+            if (IsFist(_l) && IsFist(_r)) return Mode.Move;
+        if (allowScale)
+            if (IsPointing(_l) && IsPointing(_r)) return Mode.Scale;
+        return Mode.None;
     }
 
     // ---------- manipulation ----------
 
-    void Activate()
+    void SetMode(Mode m)
     {
-        _active = true;
+        if (m == _mode) return;
+        if (debugLogs) Debug.Log($"GateMover: {_mode} -> {m}");
+        _mode = m;
+        if (m == Mode.None) return;
+
         _smoothInit = false;
         SampleHands(out var l, out var r);
         _prevMid = (l + r) * 0.5f;
         _prevDist = Vector3.Distance(l, r);
         _prevYaw = Yaw(l, r);
-        if (debugLogs) Debug.Log("GateMover: START");
-    }
-
-    void Deactivate()
-    {
-        if (_active && debugLogs) Debug.Log("GateMover: END");
-        _active = false;
-        _gestureTimer = 0f;
     }
 
     void Apply()
@@ -131,23 +199,30 @@ public class GateMover : MonoBehaviour
         float dist = Vector3.Distance(l, r);
         float yaw = Yaw(l, r);
 
-        if (allowMove)
+        if (_mode == Mode.Move)
         {
-            Vector3 delta = mid - _prevMid;
-            if (!allowVertical) delta.y = 0f;
-            transform.position += delta;
+            if (allowMove)
+            {
+                Vector3 delta = mid - _prevMid;
+                if (!allowVertical) delta.y = 0f;
+                transform.position += delta;
+            }
+            if (allowRotate)
+            {
+                float dYaw = Mathf.DeltaAngle(_prevYaw, yaw);
+                Vector3 pivot = new Vector3(mid.x, transform.position.y, mid.z);
+                transform.RotateAround(pivot, Vector3.up, dYaw);
+            }
         }
-
-        if (allowRotate)
+        else if (_mode == Mode.Scale && _prevDist > 0.01f)
         {
-            float dYaw = Mathf.DeltaAngle(_prevYaw, yaw);
-            transform.RotateAround(mid, Vector3.up, dYaw);
-        }
-
-        if (allowScale && _prevDist > 0.01f)
-        {
-            float s = Mathf.Clamp(transform.localScale.x * (dist / _prevDist), minScale, maxScale);
-            transform.localScale = Vector3.one * s;
+            float cur = transform.localScale.x;
+            float next = Mathf.Clamp(cur * (dist / _prevDist), minScale, maxScale);
+            float k = next / cur;
+            // масштаб вокруг середины между руками (по горизонтали), низ ворот остаётся на месте
+            Vector3 pivot = new Vector3(mid.x, transform.position.y, mid.z);
+            transform.position = pivot + (transform.position - pivot) * k;
+            transform.localScale = Vector3.one * next;
         }
 
         _prevMid = mid;
@@ -157,8 +232,9 @@ public class GateMover : MonoBehaviour
 
     void SampleHands(out Vector3 l, out Vector3 r)
     {
-        Vector3 rawL = leftHand.transform.position;
-        Vector3 rawR = rightHand.transform.position;
+        // центр ладони/кулака — костяшка среднего пальца
+        Vector3 rawL = _l.knuckle.position;
+        Vector3 rawR = _r.knuckle.position;
         if (!_smoothInit || smoothing <= 0f)
         {
             _smoothL = rawL; _smoothR = rawR; _smoothInit = true;
@@ -176,5 +252,11 @@ public class GateMover : MonoBehaviour
     {
         Vector3 d = r - l;
         return Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg;
+    }
+
+    /// <summary>Сбросить масштаб в 1:1 (можно повесить на кнопку/событие).</summary>
+    public void ResetScale()
+    {
+        transform.localScale = Vector3.one;
     }
 }

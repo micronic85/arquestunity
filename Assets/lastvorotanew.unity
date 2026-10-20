@@ -27910,8 +27910,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GateMover
   leftHand: {fileID: 0}
   rightHand: {fileID: 0}
-  indexExtendedThreshold: 0.3
-  middleCurledThreshold: 0.3
+  gateController: {fileID: 0}
+  curledRatio: 1.35
+  extendedRatio: 1.7
   gestureHoldTime: 0.15
   allowMove: 1
   allowVertical: 1
@@ -27920,7 +27921,7 @@ MonoBehaviour:
   minScale: 0.1
   maxScale: 3
   smoothing: 0.5
-  debugLogs: 0
+  debugLogs: 1
 --- !u!4 &7708621622733092611
 Transform:
   m_ObjectHideFlags: 0

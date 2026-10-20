@@ -37,6 +37,9 @@ public class GateController : MonoBehaviour
     float _grabStartProgress;
     float _progress;
 
+    /// <summary>Ручку сейчас держат (контроллером или рукой).</summary>
+    public bool IsHandleGrabbed => _source != GrabSource.None;
+
     Transform HandleTransform =>
         handleHandGrab != null ? handleHandGrab.transform :
         handleGrab != null ? handleGrab.transform : transform;
