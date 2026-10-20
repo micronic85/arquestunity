@@ -19,8 +19,8 @@
 ## Скрипты (Assets/scripts)
 - `GateController.cs` — хват за ручку; вертикальное движение руки/контроллера → прогресс анимации 0..maxProgress.
   Запоминает источник хвата (левый/правый контроллер или рука). `openHandTravelY` в сцене = 2.3. Логи — галочка `debugLogs`.
-- `GateMover.cs` — две руки с вытянутыми указательными: перемещение, поворот только по Y вокруг середины между руками,
-  масштаб (allowScale), сглаживание. Включён.
+- `GateMover.cs` — жесты по костям OVRSkeleton: два кулака — перенос + поворот по Y; два указательных (остальные согнуты) —
+  масштаб вокруг середины между руками (allowScale). Пока держат ручку (GateController.IsHandleGrabbed) — не работает. Логи — `debugLogs`.
 - `Assets/Editor/ArGatesProjectSetup.cs` — пункт меню для Player Settings.
 
 ## Подключение Claude к Unity
