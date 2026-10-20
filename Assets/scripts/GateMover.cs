@@ -40,6 +40,8 @@ public class GateMover : MonoBehaviour
 
     [Header("Debug")]
     public bool debugLogs = false;
+    [Tooltip("Раз в N секунд писать в лог состояние рук и пальцев (0 — выкл.)")]
+    public float diagInterval = 1f;
 
     enum Mode { None, Move, Scale }
 
@@ -59,6 +61,7 @@ public class GateMover : MonoBehaviour
     Mode _candidate = Mode.None;
     float _gestureTimer;
     float _nextHandSearch;
+    float _nextDiag;
 
     Vector3 _prevMid;
     float _prevDist;
@@ -74,7 +77,11 @@ public class GateMover : MonoBehaviour
 
     void Update()
     {
-        if (!EnsureHands() || !EnsureBones(leftHand, _l) || !EnsureBones(rightHand, _r)) { SetMode(Mode.None); return; }
+        bool hands = EnsureHands();
+        bool bonesL = hands && EnsureBones(leftHand, _l);
+        bool bonesR = hands && EnsureBones(rightHand, _r);
+        Diag(hands, bonesL, bonesR);
+        if (!hands || !bonesL || !bonesR) { SetMode(Mode.None); return; }
 
         Mode gesture = DetectGesture();
         if (HandleGrabbed()) gesture = Mode.None;
@@ -143,7 +150,7 @@ public class GateMover : MonoBehaviour
                 case "Hand_PinkyTip": case "XRHand_LittleTip": b.pinkyTip = bone.Transform; break;
             }
         }
-        if (debugLogs) Debug.Log($"GateMover: bones {hand.name} ready={b.Ready}");
+        if (debugLogs && b.Ready) Debug.Log($"GateMover: bones {hand.name} ready");
         return b.Ready;
     }
 
@@ -174,6 +181,27 @@ public class GateMover : MonoBehaviour
         if (allowScale)
             if (IsPointing(_l) && IsPointing(_r)) return Mode.Scale;
         return Mode.None;
+    }
+
+    // ---------- diagnostics ----------
+
+    void Diag(bool hands, bool bonesL, bool bonesR)
+    {
+        if (!debugLogs || diagInterval <= 0f || Time.time < _nextDiag) return;
+        _nextDiag = Time.time + diagInterval;
+
+        if (!hands) { Debug.Log("GateMover DIAG: OVRHand не найдены (L/R)"); return; }
+        string Hand(string tag, OVRHand h, HandBones b, bool ready)
+        {
+            var sk = h.GetComponent<OVRSkeleton>();
+            string head = $"{tag}: tracked={h.IsTracked} highConf={h.IsDataHighConfidence} " +
+                          $"skel={(sk != null ? sk.GetSkeletonType().ToString() : "none")} init={(sk != null && sk.IsInitialized)} " +
+                          $"bones={(sk != null && sk.Bones != null ? sk.Bones.Count : 0)} ready={ready}";
+            if (!ready) return head;
+            return head + $" valid={b.skeleton.IsDataValid} ratio I={Ratio(b, b.indexTip):F2} M={Ratio(b, b.middleTip):F2} " +
+                          $"R={Ratio(b, b.ringTip):F2} P={Ratio(b, b.pinkyTip):F2} fist={IsFist(b)} point={IsPointing(b)}";
+        }
+        Debug.Log($"GateMover DIAG: mode={_mode} grabbed={HandleGrabbed()} | {Hand("L", leftHand, _l, bonesL)} | {Hand("R", rightHand, _r, bonesR)}");
     }
 
     // ---------- manipulation ----------
