@@ -27666,7 +27666,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0.678, y: 0.7, z: -0.23}
-  m_LocalScale: {x: 0.71, y: 0.71, z: 0.71}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 4256056376431903131}
@@ -27921,7 +27921,8 @@ MonoBehaviour:
   minScale: 0.1
   maxScale: 3
   smoothing: 0.5
-  debugLogs: 1
+  debugLogs: 0
+  diagInterval: 1
 --- !u!4 &7708621622733092611
 Transform:
   m_ObjectHideFlags: 0
