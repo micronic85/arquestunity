@@ -101,39 +101,29 @@ public class GateMover : MonoBehaviour
 
     bool EnsureHands()
     {
-        if (leftHand != null && rightHand != null) return true;
+        if (leftHand != null && rightHand != null && _l.skeleton != null && _r.skeleton != null) return true;
         if (Time.time < _nextHandSearch) return false;
         _nextHandSearch = Time.time + HandSearchInterval;
 
-        foreach (var hand in FindObjectsByType<OVRHand>(FindObjectsSortMode.None))
+        // Ищем от скелета: в сцене бывает несколько OVRHand, и не на всех есть OVRSkeleton (кости пальцев).
+        foreach (var sk in FindObjectsByType<OVRSkeleton>(FindObjectsSortMode.None))
         {
-            bool? isLeft = IsLeft(hand);
-            if (isLeft == true && leftHand == null) leftHand = hand;
-            else if (isLeft == false && rightHand == null) rightHand = hand;
-        }
-        if (debugLogs) Debug.Log($"GateMover: hands L={leftHand?.name} R={rightHand?.name}");
-        return leftHand != null && rightHand != null;
-    }
+            string t = sk.GetSkeletonType().ToString();
+            if (!t.Contains("Hand")) continue;
+            var hand = sk.GetComponent<OVRHand>() ?? sk.GetComponentInParent<OVRHand>();
+            if (hand == null) continue;
 
-    static bool? IsLeft(OVRHand hand)
-    {
-        var skeleton = hand.GetComponent<OVRSkeleton>();
-        if (skeleton != null)
-        {
-            string t = skeleton.GetSkeletonType().ToString();
-            if (t.Contains("Left")) return true;
-            if (t.Contains("Right")) return false;
+            if (t.Contains("Left") && _l.skeleton == null) { _l.skeleton = sk; leftHand = hand; }
+            else if (t.Contains("Right") && _r.skeleton == null) { _r.skeleton = sk; rightHand = hand; }
         }
-        string n = hand.name.ToLowerInvariant();
-        if (n.Contains("left")) return true;
-        if (n.Contains("right")) return false;
-        return null;
+        if (debugLogs)
+            Debug.Log($"GateMover: hands L={leftHand?.name}/{_l.skeleton?.name} R={rightHand?.name}/{_r.skeleton?.name}");
+        return leftHand != null && rightHand != null && _l.skeleton != null && _r.skeleton != null;
     }
 
     bool EnsureBones(OVRHand hand, HandBones b)
     {
         if (b.Ready) return true;
-        if (b.skeleton == null) b.skeleton = hand.GetComponent<OVRSkeleton>();
         if (b.skeleton == null || !b.skeleton.IsInitialized || b.skeleton.Bones == null) return false;
 
         // Имена костей: OVR-скелет (Hand_*) или OpenXR-скелет (XRHand_*)
@@ -190,10 +180,10 @@ public class GateMover : MonoBehaviour
         if (!debugLogs || diagInterval <= 0f || Time.time < _nextDiag) return;
         _nextDiag = Time.time + diagInterval;
 
-        if (!hands) { Debug.Log("GateMover DIAG: OVRHand не найдены (L/R)"); return; }
+        if (!hands) { Debug.Log("GateMover DIAG: руки со скелетом (OVRHand + OVRSkeleton) не найдены"); return; }
         string Hand(string tag, OVRHand h, HandBones b, bool ready)
         {
-            var sk = h.GetComponent<OVRSkeleton>();
+            var sk = b.skeleton;
             string head = $"{tag}: tracked={h.IsTracked} highConf={h.IsDataHighConfidence} " +
                           $"skel={(sk != null ? sk.GetSkeletonType().ToString() : "none")} init={(sk != null && sk.IsInitialized)} " +
                           $"bones={(sk != null && sk.Bones != null ? sk.Bones.Count : 0)} ready={ready}";
