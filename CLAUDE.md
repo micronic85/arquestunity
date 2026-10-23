@@ -21,6 +21,13 @@
   Запоминает источник хвата (левый/правый контроллер или рука). `openHandTravelY` в сцене = 2.3. Логи — галочка `debugLogs`.
 - `GateMover.cs` — жесты по костям OVRSkeleton: два кулака — перенос + поворот по Y; два указательных (остальные согнуты) —
   масштаб вокруг середины между руками (allowScale). Пока держат ручку (GateController.IsHandleGrabbed) — не работает. Логи — `debugLogs`.
+- `GateColorPicker.cs` (на lastvorota) — меню на левой ладони (ладонь к лицу): палитра цвета полотна
+  (полотно получает текстурный материал модели, плитка — точный цвет RAL; список Palette в инспекторе)
+  + блок «Проём · DISTO» (ширина/высота, выбор поля, Подключить/Сбросить). Нажатие — указательным правой руки.
+- `DistoMeasure.cs` (объект DistoMeasure) + `Assets/Plugins/Android/DistoBle.java` — Leica DISTO D110 по BLE:
+  сервис 3ab10100-f831-4395-b29d-570977d5bf94, замер = float32 LE в метрах в уведомлениях (как в
+  D:\sites\vorotych-project apps/crm/src/zamer/tape.ts). Разрешения BLUETOOTH_SCAN/CONNECT — в
+  Assets/Plugins/Android/AndroidManifest.xml. Проверено на шлеме: замеры приходят.
 - `Assets/Editor/ArGatesProjectSetup.cs` — пункт меню для Player Settings.
 
 ## Подключение Claude к Unity
@@ -41,9 +48,6 @@
 - Проверка на устройстве — только в шлеме, Claude этого сделать не может.
 
 ## TODO
-- Замер проёма лазерной рулеткой Leica DISTO D110 (BLE) → размеры в меню на ладони (ширина/высота, мм).
-  Свой Android-плагин (Java) в Assets/Plugins/Android; UUID сервисов сверить по nRF Connect с реального D110.
-  Модель ворот НЕ растягивать — только показ размеров.
 - Адаптивная (параметрическая) модель ворот: переделать исходник .blend через Blender MCP (группы, имена,
   секции по размеру проёма), потом загружать в проект. Проверить целостность .blend (chkdsk чинил сектора).
 - Решить: масштаб для примерки 1:1 (сейчас allowScale = true).
