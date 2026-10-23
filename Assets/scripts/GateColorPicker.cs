@@ -1,9 +1,10 @@
+using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
 /// <summary>
-/// Смена цвета полотна ворот через меню на левой ладони.
+/// Меню на левой ладони: цвет полотна ворот + блок замера проёма рулеткой DISTO (если есть DistoMeasure).
 ///  • Повернуть левую ладонь к лицу — над ней появляется палитра (плитки с материалами панелей).
 ///  • Ткнуть в плитку указательным пальцем правой руки — лицевые панели ворот получают этот материал.
 /// Палитра — список palette: полотно получает текстурный материал из модели (materialName,
@@ -68,6 +69,10 @@ public class GateColorPicker : MonoBehaviour
     public float showDot = 0.65f;
     public float hideDot = 0.4f;
 
+    [Header("Measure")]
+    [Tooltip("Замер рулеткой DISTO; пусто — найдётся в сцене, если есть")]
+    public DistoMeasure measure;
+
     [Header("Poke")]
     [Tooltip("Глубина зоны нажатия перед/за плиткой, м")]
     public float pokeDepth = 0.015f;
@@ -98,6 +103,14 @@ public class GateColorPicker : MonoBehaviour
     Transform _highlight;
     int _selected = -1;
 
+    // Всё, что нажимается пальцем: плитки цветов и кнопки замера
+    class Button { public Transform t; public Vector2 half; public Action press; }
+    readonly List<Button> _buttons = new List<Button>();
+
+    // Блок замера
+    TextMeshPro _widthText, _heightText, _statusText;
+    Transform _widthBtn, _heightBtn, _fieldHighlight;
+
     bool _menuVisible;
     bool _pokeArmed = true;
     float _nextPoke;
@@ -106,7 +119,9 @@ public class GateColorPicker : MonoBehaviour
     void Start()
     {
         CollectMaterials();
+        if (measure == null) measure = FindFirstObjectByType<DistoMeasure>();
         BuildMenu();
+        if (measure != null) { measure.Changed += RefreshMeasure; RefreshMeasure(); }
         SetMenuVisible(false);
     }
 
@@ -192,14 +207,11 @@ public class GateColorPicker : MonoBehaviour
         float labelH = tileSize * 0.45f;
         float rowStep = step + labelH;
         float width = columns * step - tileGap;
-        float height = rows * rowStep;
 
-        var bg = Quad("Background", _menu, backgroundMaterial, new Color(0.08f, 0.08f, 0.1f, 0.85f));
-        bg.localScale = new Vector3(width + 0.02f, height + 0.035f, 1f);
-        bg.localPosition = new Vector3(0, 0.0075f, 0.002f);
-
-        var title = Text("Title", _menu, "Цвет полотна", width, 0.015f);
-        title.localPosition = new Vector3(0, height * 0.5f + 0.003f, 0);
+        // Раскладка сверху вниз от y = 0, в конце всё центрируется
+        float y = 0f;
+        Text("Title", _menu, "Цвет полотна", width, 0.015f).localPosition = new Vector3(0, y - 0.0075f, 0);
+        y -= 0.02f;
 
         _highlight = Quad("Highlight", _menu, highlightMaterial, Color.white);
         _highlight.localScale = new Vector3(tileSize + 0.006f, tileSize + 0.006f, 1f);
@@ -209,20 +221,91 @@ public class GateColorPicker : MonoBehaviour
         {
             int c = i % columns, row = i / columns;
             float x = -width * 0.5f + tileSize * 0.5f + c * step;
-            float y = height * 0.5f - tileSize * 0.5f - row * rowStep - 0.012f;
+            float ty = y - tileSize * 0.5f - row * rowStep;
 
             var tile = GameObject.CreatePrimitive(PrimitiveType.Quad).transform;
             Destroy(tile.GetComponent<Collider>());
             tile.name = "Tile_" + i;
             tile.SetParent(_menu, false);
-            tile.localPosition = new Vector3(x, y, 0);
+            tile.localPosition = new Vector3(x, ty, 0);
             tile.localScale = new Vector3(tileSize, tileSize, 1f);
             if (_palette[i].tile != null) tile.GetComponent<Renderer>().sharedMaterial = _palette[i].tile;
             _tiles.Add(tile);
+            int index = i;
+            AddButton(tile, tileSize, tileSize, () => Apply(index));
 
-            var label = Text("Label_" + i, _menu, _palette[i].label, step * 0.95f, labelH);
-            label.localPosition = new Vector3(x, y - tileSize * 0.5f - labelH * 0.5f, 0);
+            Text("Label_" + i, _menu, _palette[i].label, step * 0.95f, labelH)
+                .localPosition = new Vector3(x, ty - tileSize * 0.5f - labelH * 0.5f, 0);
         }
+        y -= rows * rowStep;
+
+        if (measure != null) y = BuildMeasure(y, width);
+
+        // Центрируем содержимое и подкладываем фон
+        float top = 0f, bottom = y;
+        float centerY = (top + bottom) * 0.5f;
+        foreach (Transform child in _menu) child.localPosition -= new Vector3(0, centerY, 0);
+        var bg = Quad("Background", _menu, backgroundMaterial, new Color(0.08f, 0.08f, 0.1f, 1f));
+        bg.localScale = new Vector3(width + 0.02f, top - bottom + 0.02f, 1f);
+        bg.localPosition = new Vector3(0, 0, 0.002f);
+    }
+
+    float BuildMeasure(float y, float width)
+    {
+        y -= 0.008f;
+        Text("MeasureTitle", _menu, "Проём · DISTO", width, 0.013f).localPosition = new Vector3(0, y - 0.0065f, 0);
+        y -= 0.014f;
+        _statusText = Text("MeasureStatus", _menu, "", width, 0.009f).GetComponent<TextMeshPro>();
+        _statusText.color = new Color(0.75f, 0.75f, 0.8f);
+        _statusText.transform.localPosition = new Vector3(0, y - 0.0045f, 0);
+        y -= 0.012f;
+
+        float half = (width - tileGap) * 0.5f;
+        float bigH = 0.03f, smallH = 0.018f;
+        float xl = -width * 0.5f + half * 0.5f, xr = width * 0.5f - half * 0.5f;
+
+        _fieldHighlight = Quad("FieldHighlight", _menu, highlightMaterial, Color.white);
+        _fieldHighlight.localScale = new Vector3(half + 0.005f, bigH + 0.005f, 1f);
+
+        _widthBtn = PanelButton("WidthBtn", new Vector3(xl, y - bigH * 0.5f, 0), half, bigH, out _widthText,
+            () => measure.SetNext(DistoMeasure.Field.Width));
+        _heightBtn = PanelButton("HeightBtn", new Vector3(xr, y - bigH * 0.5f, 0), half, bigH, out _heightText,
+            () => measure.SetNext(DistoMeasure.Field.Height));
+        y -= bigH + tileGap;
+
+        PanelButton("ConnectBtn", new Vector3(xl, y - smallH * 0.5f, 0), half, smallH, out var connectText, () => measure.Connect());
+        connectText.text = "Подключить";
+        PanelButton("ResetBtn", new Vector3(xr, y - smallH * 0.5f, 0), half, smallH, out var resetText, () => measure.ResetValues());
+        resetText.text = "Сбросить";
+        y -= smallH;
+        return y;
+    }
+
+    Transform PanelButton(string name, Vector3 pos, float w, float h, out TextMeshPro label, Action press)
+    {
+        var q = Quad(name, _menu, null, Color.white);
+        var m = TileMaterial(new Color(0.22f, 0.24f, 0.3f));
+        if (m != null) q.GetComponent<Renderer>().sharedMaterial = m;
+        q.localPosition = pos;
+        q.localScale = new Vector3(w, h, 1f);
+        AddButton(q, w, h, press);
+        var t = Text(name + "Label", _menu, "", w * 0.92f, h * 0.85f);
+        t.localPosition = pos + new Vector3(0, 0, -0.001f);
+        label = t.GetComponent<TextMeshPro>();
+        return q;
+    }
+
+    void AddButton(Transform t, float w, float h, Action press) =>
+        _buttons.Add(new Button { t = t, half = new Vector2(w * 0.5f, h * 0.5f), press = press });
+
+    void RefreshMeasure()
+    {
+        if (measure == null || _widthText == null) return;
+        _widthText.text = "Ширина\n" + DistoMeasure.Format(measure.Width);
+        _heightText.text = "Высота\n" + DistoMeasure.Format(measure.Height);
+        _statusText.text = measure.Status;
+        var target = measure.Next == DistoMeasure.Field.Width ? _widthBtn : _heightBtn;
+        _fieldHighlight.localPosition = target.localPosition + new Vector3(0, 0, 0.001f);
     }
 
     static Transform Quad(string name, Transform parent, Material mat, Color fallback)
@@ -308,20 +391,19 @@ public class GateColorPicker : MonoBehaviour
         if (!_right.Tracked) { _pokeArmed = true; return; }
 
         Vector3 p = _menu.InverseTransformPoint(_right.indexTip.position);
-        int hit = -1;
-        float half = tileSize * 0.5f;
-        for (int i = 0; i < _tiles.Count; i++)
+        Button hit = null;
+        foreach (var b in _buttons)
         {
-            Vector3 t = _tiles[i].localPosition;
-            if (Mathf.Abs(p.x - t.x) < half && Mathf.Abs(p.y - t.y) < half && Mathf.Abs(p.z) < pokeDepth) { hit = i; break; }
+            Vector3 t = b.t.localPosition;
+            if (Mathf.Abs(p.x - t.x) < b.half.x && Mathf.Abs(p.y - t.y) < b.half.y && Mathf.Abs(p.z) < pokeDepth) { hit = b; break; }
         }
 
-        if (hit < 0) { _pokeArmed = true; return; }
+        if (hit == null) { _pokeArmed = true; return; }
         if (!_pokeArmed || Time.time < _nextPoke) return;
 
         _pokeArmed = false;
         _nextPoke = Time.time + pokeCooldown;
-        Apply(hit);
+        hit.press();
     }
 
     // ---------- refs ----------
@@ -365,6 +447,7 @@ public class GateColorPicker : MonoBehaviour
 
     void OnDestroy()
     {
+        if (measure != null) measure.Changed -= RefreshMeasure;
         if (_menu != null) Destroy(_menu.gameObject);
     }
 }
