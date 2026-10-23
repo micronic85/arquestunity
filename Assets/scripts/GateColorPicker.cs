@@ -112,7 +112,7 @@ public class GateColorPicker : MonoBehaviour
     readonly List<Button> _buttons = new List<Button>();
 
     // Блок замера
-    TextMeshPro _widthText, _heightText, _statusText;
+    TextMeshPro _widthText, _heightText, _statusText, _openText;
     Transform _widthBtn, _heightBtn, _fieldHighlight;
 
     bool _menuVisible;
@@ -271,6 +271,14 @@ public class GateColorPicker : MonoBehaviour
         }
         y -= rows * rowStep;
 
+        // Открыть / закрыть адаптивные ворота
+        if (builder != null)
+        {
+            y -= 0.006f;
+            PanelButton("OpenBtn", new Vector3(0, y - 0.011f, 0), width, 0.022f, out _openText, () => builder.ToggleOpen());
+            y -= 0.022f;
+        }
+
         if (measure != null) y = BuildMeasure(y, width);
 
         // Центрируем содержимое и подкладываем фон
@@ -416,6 +424,9 @@ public class GateColorPicker : MonoBehaviour
         if (!_menuVisible && facing > showDot) SetMenuVisible(true);
         else if (_menuVisible && facing < hideDot) SetMenuVisible(false);
         if (!_menuVisible) return;
+
+        if (_openText != null && builder != null)
+            _openText.text = builder.OpenOrOpening ? "Закрыть ворота" : "Открыть ворота";
 
         // Меню над ладонью, развёрнуто к голове, без крена
         Vector3 pos = palm + normal * palmOffset;

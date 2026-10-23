@@ -42,6 +42,10 @@ public class GateBuilder : MonoBehaviour
     public float trackOffset = 0.06f;
     public Vector2 trackProfile = new Vector2(0.07f, 0.04f);
 
+    [Header("Открывание кнопкой")]
+    [Tooltip("Время полного открытия/закрытия, с")]
+    public float fullOpenTime = 6f;
+
     [Header("Debug")]
     public bool debugLogs = false;
     [Range(-1f, 1f)]
@@ -82,6 +86,7 @@ public class GateBuilder : MonoBehaviour
         _templates = t;
         for (int i = 1; i <= 5; i++) _tmplSections[i] = t.Find("Section_" + i);
         _tmplHardware = t.Find("Hardware");
+        if (debugLogs) Debug.Log($"GateBuilder: шаблоны {string.Join(",", System.Array.ConvertAll(_tmplSections, x => x ? x.name : "-"))}, hardware={(_tmplHardware ? "+" : "-")}");
         // Шаблоны не видны, но их материалы (Sphere — палитра) остаются доступны
         foreach (Transform c in t) if (c.name != "Sphere") c.gameObject.SetActive(false);
         var sphere = t.Find("Sphere");
@@ -157,6 +162,43 @@ public class GateBuilder : MonoBehaviour
         Rebuild();
     }
 
+    public bool IsAnimating => _anim != null;
+    /// <summary>Ворота открыты или открываются (для подписи кнопки).</summary>
+    public bool OpenOrOpening => _anim != null ? _animTarget > 0.5f : Progress > 0.5f;
+    Coroutine _anim;
+
+    /// <summary>Плавно открыть (если закрыты/закрываются) или закрыть.</summary>
+    public void ToggleOpen()
+    {
+        bool opening = _anim != null ? _animTarget < 0.5f : Progress < 0.5f;
+        AnimateTo(opening ? 1f : 0f);
+    }
+
+    float _animTarget;
+    public void AnimateTo(float target)
+    {
+        StopAnimation();
+        _animTarget = Mathf.Clamp01(target);
+        _anim = StartCoroutine(AnimateRoutine());
+    }
+
+    public void StopAnimation()
+    {
+        if (_anim != null) StopCoroutine(_anim);
+        _anim = null;
+    }
+
+    System.Collections.IEnumerator AnimateRoutine()
+    {
+        while (!Mathf.Approximately(Progress, _animTarget))
+        {
+            float step = Time.deltaTime / Mathf.Max(0.1f, fullOpenTime);
+            SetProgress(Mathf.MoveTowards(Progress, _animTarget, step));
+            yield return null;
+        }
+        _anim = null;
+    }
+
     /// <summary>0 — закрыты, 1 — открыты.</summary>
     public void SetProgress(float p)
     {
@@ -189,7 +231,9 @@ public class GateBuilder : MonoBehaviour
         int n = _heights.Count;
         for (int i = 0; i < n; i++)
         {
-            var tmpl = _tmplSections[TemplateFor(i, n)];
+            int ti = TemplateFor(i, n);
+            var tmpl = _templates.Find("Section_" + ti); // ищем каждый раз: ссылки на шаблоны могут обнулиться при перезагрузке скриптов
+            if (tmpl == null) { Debug.LogError($"GateBuilder: нет шаблона Section_{ti} (templates={_templates?.name}, children={_templates?.childCount})", this); continue; }
             var s = Instantiate(tmpl.gameObject, _root).transform;
             s.name = "Section_" + (i + 1);
             s.gameObject.SetActive(true);
@@ -248,14 +292,49 @@ public class GateBuilder : MonoBehaviour
     {
         float dW = CurtainWidth - W0;
         var parts = new List<Transform>();
-        foreach (Transform c in section) parts.Add(c);
+        var bounds = new Dictionary<Transform, Bounds>();
+        foreach (Transform c in section)
+        {
+            parts.Add(c);
+            if (LocalBounds(section, c, out var bb)) bounds[c] = bb;
+        }
+
+        // Калитка: её положение по ширине (детали «калитка*»)
+        Bounds? wicket = null;
+        foreach (var kv in bounds)
+            if (kv.Key.name.StartsWith("калитка") && kv.Value.size.z < 0.5f * W0)
+            { if (wicket == null) wicket = kv.Value; else { var w = wicket.Value; w.Encapsulate(kv.Value); wicket = w; } }
+        float wkC = wicket?.center.z ?? 0f, wkHalf = wicket?.extents.z ?? 0f;
+        float wkShift = wkC * (kW - 1f);
+
+        // Окна: детали шириной 0,5–0,8 м и высотой > 0,2 м, сгруппированные по положению.
+        // Окно внутри калитки едет с калиткой; боковые — посередине между калиткой и краем полотна,
+        // а если места мало — скрываются.
+        var windowShift = new Dictionary<Transform, float>();
+        var hidden = new HashSet<Transform>();
+        foreach (var kv in bounds)
+        {
+            var b0 = kv.Value;
+            if (b0.size.z < 0.5f || b0.size.z > 0.8f || b0.size.y < 0.2f || kv.Key.name.StartsWith("калитка")) continue;
+            float zc = b0.center.z, winW = b0.size.z;
+            if (wicket != null && Mathf.Abs(zc - wkC) < wkHalf) { windowShift[kv.Key] = wkShift; continue; }
+            float side = Mathf.Sign(zc - wkC);
+            float inner = wkC + wkShift + side * wkHalf;
+            float outer = side * (CurtainWidth * 0.5f - 0.08f);
+            float space = Mathf.Abs(outer - inner);
+            if (space < winW + 0.15f) { hidden.Add(kv.Key); continue; }
+            windowShift[kv.Key] = (inner + outer) * 0.5f - zc;
+        }
+
         foreach (var p in parts)
         {
-            if (!LocalBounds(section, p, out var b)) continue;
+            if (!bounds.TryGetValue(p, out var b)) continue;
+            if (hidden.Contains(p)) { p.gameObject.SetActive(false); continue; }
             bool stretchZ = b.size.z > 0.5f * W0;
             bool stretchY = b.size.y > 0.7f * H0;
             float dz = 0, dy = 0;
-            if (!stretchZ)
+            if (windowShift.TryGetValue(p, out var ws)) dz = ws;
+            else if (!stretchZ)
                 dz = Mathf.Abs(b.center.z) > 0.35f * W0 ? Mathf.Sign(b.center.z) * dW * 0.5f : b.center.z * (kW - 1f);
             if (!stretchY) dy = b.center.y * (kH - 1f);
             Wrap(section, p, new Vector3(1f, stretchY ? kH : 1f, stretchZ ? kW : 1f), new Vector3(0, dy, dz));
@@ -264,6 +343,7 @@ public class GateBuilder : MonoBehaviour
 
     void BuildHardware(float kW)
     {
+        if (_tmplHardware == null) _tmplHardware = _templates.Find("Hardware");
         if (_tmplHardware == null) return;
         var hw = Instantiate(_tmplHardware.gameObject, _root).transform;
         hw.name = "Hardware";
@@ -276,6 +356,36 @@ public class GateBuilder : MonoBehaviour
 
         var parts = new List<Transform>();
         foreach (Transform c in hw) parts.Add(c);
+
+        // Узел пружины на каждой стороне (пружина + крепление на валу + ограничитель) едет к краю целиком;
+        // если до центрального кронштейна мало места — пружина укорачивается от внешнего конца к центру.
+        var springZ = new Dictionary<Transform, (float scale, float dz)>();
+        foreach (float side in new[] { -1f, 1f })
+        {
+            Transform spring = null, mount = null; Bounds sb = default, mb = default;
+            foreach (var p in parts)
+            {
+                if (!LocalBounds(hw, p, out var b) || Mathf.Sign(b.center.z) != side) continue;
+                if (p.name.StartsWith("Spring_")) { spring = p; sb = b; }
+                else if (p.name.StartsWith("ShaftMount_")) { mount = p; mb = b; }
+                else if (p.name.StartsWith("SpringStop_")) springZ[p] = (1f, side * dW * 0.5f);
+            }
+            if (spring == null) continue;
+            float e = side * dW * 0.5f;
+            float zOuter = side * Mathf.Max(Mathf.Abs(sb.min.z), Mathf.Abs(sb.max.z));
+            float zInner = side * Mathf.Min(Mathf.Abs(sb.min.z), Mathf.Abs(sb.max.z));
+            float len = Mathf.Abs(zOuter - zInner);
+            float newOuter = zOuter + e;
+            float maxLen = Mathf.Abs(newOuter) - 0.18f - (mount ? mb.size.z : 0.07f);
+            float k = Mathf.Clamp(maxLen / len, 0.35f, 1f);
+            springZ[spring] = (k, zOuter * (1f - k) + e);
+            if (mount)
+            {
+                float newInner = newOuter - side * len * k;
+                springZ[mount] = (1f, newInner + (mb.center.z - zInner) - mb.center.z);
+            }
+        }
+
         foreach (var p in parts)
         {
             // тяга — пока без анимации; горизонтальные профили заменяет процедурная направляющая
@@ -285,8 +395,10 @@ public class GateBuilder : MonoBehaviour
             float dx = 0, dy = 0, dz = 0;
             if (!sx) dx = b.center.x > 0.6f * D0 ? dD : b.center.x * (kD - 1f);
             if (!sy) dy = b.center.y > 0.8f * HT0 ? dH : b.center.y * (kH - 1f);
-            if (!sz) dz = Mathf.Abs(b.center.z) > 0.35f * W0 ? Mathf.Sign(b.center.z) * dW * 0.5f : b.center.z * (kW - 1f);
-            Wrap(hw, p, new Vector3(sx ? kD : 1f, sy ? kH : 1f, sz ? kW : 1f), new Vector3(dx, dy, dz));
+            float scz = sz ? kW : 1f;
+            if (springZ.TryGetValue(p, out var spz)) { scz = spz.scale; dz = spz.dz; }
+            else if (!sz) dz = Mathf.Abs(b.center.z) > 0.35f * W0 ? Mathf.Sign(b.center.z) * dW * 0.5f : b.center.z * (kW - 1f);
+            Wrap(hw, p, new Vector3(sx ? kD : 1f, sy ? kH : 1f, scz), new Vector3(dx, dy, dz));
         }
     }
 

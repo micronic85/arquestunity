@@ -117,6 +117,7 @@ public class GateController : MonoBehaviour
         Vector3? pos = GetSourcePosition();
         if (!pos.HasValue) { _source = GrabSource.None; return; }
 
+        if (builder != null) { builder.StopAnimation(); _progress = builder.Progress; }
         _grabStartY = pos.Value.y;
         _grabStartProgress = _progress;
         Log($"Grab START | source={_source} hand={_grabbingHand?.name} y={_grabStartY:F3}");
