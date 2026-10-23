@@ -11,6 +11,8 @@ public class GateController : MonoBehaviour
 {
     [Header("Links")]
     public Animator gateAnimator;
+    [Tooltip("Адаптивные ворота: если задан, открывание считает он, а не Animator")]
+    public GateBuilder builder;
     public GrabInteractable handleGrab;
     public HandGrabInteractable handleHandGrab;
     public string animationClipName = "Animation";
@@ -61,7 +63,12 @@ public class GateController : MonoBehaviour
         if (_rig == null) Debug.LogError("GateController: OVRCameraRig не найден", this);
         RefreshHands();
 
-        if (gateAnimator != null)
+        if (builder == null) builder = GetComponent<GateBuilder>();
+        if (builder != null)
+        {
+            builder.SetProgress(_progress);
+        }
+        else if (gateAnimator != null)
         {
             gateAnimator.Play(animationClipName, 0, 0f);
             gateAnimator.speed = 0f;
@@ -84,14 +91,17 @@ public class GateController : MonoBehaviour
         else if (!grabbed && _source != GrabSource.None)
             EndGrab();
 
-        if (_source == GrabSource.None || gateAnimator == null) return;
+        if (_source == GrabSource.None || (gateAnimator == null && builder == null)) return;
 
         Vector3? pos = GetSourcePosition();
         if (!pos.HasValue) return;
 
-        float travel = openHandTravelY * Mathf.Max(0.0001f, transform.lossyScale.y);
+        // Для адаптивных ворот ход руки ≈ высоте полотна (чем выше ворота, тем дольше тянуть)
+        float baseTravel = builder != null ? builder.CurtainHeight * 0.8f : openHandTravelY;
+        float travel = baseTravel * Mathf.Max(0.0001f, transform.lossyScale.y);
         _progress = Mathf.Clamp(_grabStartProgress + (pos.Value.y - _grabStartY) / travel, 0f, maxProgress);
-        gateAnimator.SetFloat(GateProgressId, _progress);
+        if (builder != null) builder.SetProgress(_progress);
+        else gateAnimator.SetFloat(GateProgressId, _progress);
     }
 
     bool IsGrabbed()

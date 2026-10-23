@@ -69,6 +69,10 @@ public class GateColorPicker : MonoBehaviour
     public float showDot = 0.65f;
     public float hideDot = 0.4f;
 
+    [Header("Adaptive gate")]
+    [Tooltip("Адаптивные ворота; пусто — возьмётся с этого объекта")]
+    public GateBuilder builder;
+
     [Header("Measure")]
     [Tooltip("Замер рулеткой DISTO; пусто — найдётся в сцене, если есть")]
     public DistoMeasure measure;
@@ -118,7 +122,9 @@ public class GateColorPicker : MonoBehaviour
 
     void Start()
     {
+        if (builder == null) builder = GetComponent<GateBuilder>();
         CollectMaterials();
+        if (builder != null) builder.Built += RefreshTargets;
         if (measure == null) measure = FindFirstObjectByType<DistoMeasure>();
         BuildMenu();
         if (measure != null) { measure.Changed += RefreshMeasure; RefreshMeasure(); }
@@ -159,6 +165,32 @@ public class GateColorPicker : MonoBehaviour
             });
         }
         if (debugLogs) Debug.Log($"GateColorPicker: palette={_palette.Count} targets={_targets.Count} base={baseMat.shader.name}");
+    }
+
+    /// <summary>Ворота пересобраны — заново найти панели полотна и вернуть выбранный цвет.</summary>
+    public void RefreshTargets()
+    {
+        _targets.Clear();
+        foreach (var r in GetComponentsInChildren<Renderer>(true))
+        {
+            var mats = r.sharedMaterials;
+            for (int i = 0; i < mats.Length; i++)
+                if (mats[i] != null && CleanName(mats[i].name) == targetMaterialName) _targets.Add((r, i));
+        }
+        if (_selected >= 0) Apply(_selected);
+        if (debugLogs) Debug.Log($"GateColorPicker: targets refreshed = {_targets.Count}");
+    }
+
+    void FitToOpening()
+    {
+        if (builder == null || measure == null) return;
+        if (!measure.Width.HasValue || !measure.Height.HasValue)
+        {
+            if (_statusText != null) _statusText.text = "сначала измерьте ширину и высоту";
+            return;
+        }
+        builder.Build(measure.Width.Value / 1000f, measure.Height.Value / 1000f);
+        if (_statusText != null) _statusText.text = $"ворота под проём {DistoMeasure.Format(measure.Width)} × {DistoMeasure.Format(measure.Height)}";
     }
 
     // glTFast-шейдеры: baseColorFactor / roughnessFactor; URP Lit: _BaseColor / _Smoothness
@@ -277,7 +309,15 @@ public class GateColorPicker : MonoBehaviour
         connectText.text = "Подключить";
         PanelButton("ResetBtn", new Vector3(xr, y - smallH * 0.5f, 0), half, smallH, out var resetText, () => measure.ResetValues());
         resetText.text = "Сбросить";
-        y -= smallH;
+        y -= smallH + tileGap;
+
+        // Вписать адаптивные ворота в измеренный проём
+        if (builder != null)
+        {
+            PanelButton("FitBtn", new Vector3(0, y - smallH * 0.5f, 0), width, smallH, out var fitText, FitToOpening);
+            fitText.text = "Вписать ворота в проём";
+            y -= smallH;
+        }
         return y;
     }
 
@@ -447,6 +487,7 @@ public class GateColorPicker : MonoBehaviour
 
     void OnDestroy()
     {
+        if (builder != null) builder.Built -= RefreshTargets;
         if (measure != null) measure.Changed -= RefreshMeasure;
         if (_menu != null) Destroy(_menu.gameObject);
     }

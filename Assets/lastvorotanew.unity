@@ -25716,6 +25716,7 @@ GameObject:
   - component: {fileID: 7685820126626308157}
   - component: {fileID: 7685820126626308159}
   - component: {fileID: 7685820126626308160}
+  - component: {fileID: 7685820126626308161}
   m_Layer: 0
   m_Name: lastvorota
   m_TagString: Untagged
@@ -27755,6 +27756,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GateController
   gateAnimator: {fileID: 2092687163743233477}
+  builder: {fileID: 0}
   handleGrab: {fileID: 7229121986100686387}
   handleHandGrab: {fileID: 7229121986100686386}
   animationClipName: Animation
@@ -27873,10 +27875,42 @@ MonoBehaviour:
   palmOffset: 0.1
   showDot: 0.65
   hideDot: 0.4
+  builder: {fileID: 0}
   measure: {fileID: 0}
   pokeDepth: 0.015
   pokeCooldown: 0.4
   debugLogs: 1
+--- !u!114 &7685820126626308161
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6533024917476223039}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3aaabfb5c4de76143a389542df9c7408, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GateBuilder
+  partsPrefab: {fileID: 8771091787928289351, guid: 7f9d769b55f10f6498ab07dd3001aa53, type: 3}
+  modelOffset: {x: 0, y: -0.4233, z: 0}
+  handleObject: {fileID: 0}
+  hideLegacyModel: 1
+  openingWidth: 4.155
+  openingHeight: 2.743
+  widthOverlap: 0.1
+  heightOverlap: 0.05
+  minSection: 0.45
+  maxSection: 0.6
+  sectionStep: 0.025
+  liftRadius: 0.4
+  horizontalExtra: 0.65
+  trackSideGap: 0.05
+  trackOffset: 0.06
+  trackProfile: {x: 0.07, y: 0.04}
+  debugLogs: 1
+  debugProgress: -1
+  debugSnapshot: 0
 --- !u!4 &7708621622733092611
 Transform:
   m_ObjectHideFlags: 0
