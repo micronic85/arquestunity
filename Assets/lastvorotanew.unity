@@ -28029,7 +28029,7 @@ MonoBehaviour:
   trackOffset: 0.06
   trackProfile: {x: 0.07, y: 0.04}
   fullOpenTime: 6
-  debugLogs: 1
+  debugLogs: 0
   debugProgress: -1
   debugSnapshot: 0
 --- !u!4 &7708621622733092611

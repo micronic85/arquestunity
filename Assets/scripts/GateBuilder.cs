@@ -416,11 +416,18 @@ public class GateBuilder : MonoBehaviour
             // тяга — пока без анимации; горизонтальные профили заменяет процедурная направляющая
             if (p.name == "DriveArm" || p.name.StartsWith("HorizProfile")) { p.gameObject.SetActive(false); continue; }
             if (!LocalBounds(hw, p, out var b)) continue;
+            if (debugLogs) Debug.Log($"[GateBuilder] part {p.name} min={b.min.ToString("F3")} max={b.max.ToString("F3")}");
             bool sx = b.size.x > 0.5f * D0, sy = b.size.y > 0.5f * HT0, sz = b.size.z > 0.5f * W0;
-            float dx = 0, dy = 0, dz = 0;
-            if (!sx) dx = b.center.x > 0.6f * D0 ? dD : b.center.x * (kD - 1f);
-            if (!sy) dy = b.center.y > 0.8f * HT0 ? dH : b.center.y * (kH - 1f);
-            float scz = sz ? kW : 1f;
+            // Каждая координата переносится по правилу оси (у дальнего края — сдвиг, ближе — пропорционально).
+            // Длинные детали тянутся так, чтобы оба конца попали туда же, куда и соседние детали:
+            // стойка у проёма заканчивается под кронштейном барабана, а не на kH от исходной высоты.
+            float MapX(float x) => x > 0.6f * D0 ? x + dD : x * kD;
+            float MapY(float y) => y > 0.8f * HT0 ? y + dH : y * kH;
+            float MapZ(float z) => Mathf.Abs(z) > 0.35f * W0 ? z + Mathf.Sign(z) * dW * 0.5f : z * kW;
+            float scx = 1f, scy = 1f, scz = 1f;
+            float dx = MapX(b.center.x) - b.center.x, dy = MapY(b.center.y) - b.center.y, dz = 0;
+            if (sx) Stretch(b.min.x, b.max.x, MapX, out scx, out dx);
+            if (sy) Stretch(b.min.y, b.max.y, MapY, out scy, out dy);
             if (p.name.StartsWith("TrackHanger"))
             {
                 // Подвес к потолку: низ — на горизонтальной направляющей, по ширине — над ней,
@@ -433,9 +440,18 @@ public class GateBuilder : MonoBehaviour
                 continue;
             }
             if (springZ.TryGetValue(p, out var spz)) { scz = spz.scale; dz = spz.dz; }
-            else if (!sz) dz = Mathf.Abs(b.center.z) > 0.35f * W0 ? Mathf.Sign(b.center.z) * dW * 0.5f : b.center.z * (kW - 1f);
-            Wrap(hw, p, new Vector3(sx ? kD : 1f, sy ? kH : 1f, scz), new Vector3(dx, dy, dz));
+            else if (sz) Stretch(b.min.z, b.max.z, MapZ, out scz, out dz);
+            else dz = Mathf.Abs(b.center.z) > 0.35f * W0 ? Mathf.Sign(b.center.z) * dW * 0.5f : b.center.z * (kW - 1f);
+            Wrap(hw, p, new Vector3(scx, scy, scz), new Vector3(dx, dy, dz));
         }
+    }
+
+    // Масштаб и сдвиг (вокруг начала координат обёртки), переводящие отрезок [a, b] в [map(a), map(b)]
+    static void Stretch(float a, float b, System.Func<float, float> map, out float scale, out float offset)
+    {
+        float na = map(a), nb = map(b);
+        scale = Mathf.Max(0.05f, (nb - na) / Mathf.Max(1e-4f, b - a));
+        offset = na - a * scale;
     }
 
     static void Wrap(Transform parent, Transform part, Vector3 scale, Vector3 offset)
