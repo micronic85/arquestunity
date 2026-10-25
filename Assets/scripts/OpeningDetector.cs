@@ -15,6 +15,16 @@ public class OpeningDetector : MonoBehaviour
     public MRUKAnchor.SceneLabels labels = MRUKAnchor.SceneLabels.DOOR_FRAME | MRUKAnchor.SceneLabels.WINDOW_FRAME;
     public bool showHighlights = true;
 
+    [Header("Фильтр ложных проёмов")]
+    [Tooltip("Брать проёмы только из комнаты, где сейчас стоит пользователь (старые/другие разметки дают «висящие» рамки)")]
+    public bool onlyCurrentRoom = true;
+    [Tooltip("Проём должен быть вертикальным (|наклон нормали| меньше порога)")]
+    public float maxNormalTilt = 0.2f;
+    [Tooltip("Проём должен лежать на стене своей комнаты: до плоскости стены не дальше, м")]
+    public float maxDistanceToWall = 0.25f;
+    [Tooltip("Проёмы с центрами ближе этого и одинаковой нормалью считаются дублями, м")]
+    public float duplicateDistance = 0.3f;
+
     [Header("Вид")]
     public Material lineMaterial;
     public Material selectedMaterial;
@@ -76,23 +86,65 @@ public class OpeningDetector : MonoBehaviour
         _openings.Clear();
         Selected = null;
 
+        int rejected = 0;
         if (MRUK.Instance != null)
-            foreach (var room in MRUK.Instance.Rooms)
+        {
+            var current = MRUK.Instance.GetCurrentRoom();
+            _room = current;
+            var rooms = new List<MRUKRoom>();
+            if (onlyCurrentRoom && current != null) rooms.Add(current); else rooms.AddRange(MRUK.Instance.Rooms);
+            if (debugLogs) Debug.Log($"OpeningDetector: комнат в разметке {MRUK.Instance.Rooms.Count}, текущая {(current ? current.name : "не определена")}, берём {rooms.Count}");
+
+            foreach (var room in rooms)
                 foreach (var a in room.Anchors)
                 {
                     if (!a.HasAnyLabel(labels) || !a.PlaneRect.HasValue) continue;
                     var o = new Opening { anchor = a, rect = a.PlaneRect.Value, floorY = FloorY(room) };
+                    string why = Reject(o, room);
+                    if (why != null)
+                    {
+                        rejected++;
+                        if (debugLogs) Debug.Log($"OpeningDetector: отброшен {a.Label} {o.WidthM * 1000:0}×{o.HeightM * 1000:0} — {why}");
+                        continue;
+                    }
                     if (showHighlights) BuildHighlight(o);
                     _openings.Add(o);
                 }
+        }
 
         Status = _openings.Count > 0
-            ? $"проёмов найдено: {_openings.Count}"
+            ? $"проёмов найдено: {_openings.Count}" + (rejected > 0 ? $" (отброшено {rejected})" : "")
             : "проёмы не найдены — отметьте дверь в настройке пространства";
         if (debugLogs)
             foreach (var o in _openings)
                 Debug.Log($"OpeningDetector: {o.anchor.Label} {o.WidthM * 1000:0}×{o.HeightM * 1000:0} мм at {o.BottomCenter}");
         Changed?.Invoke();
+    }
+
+    MRUKRoom _room;
+    float _nextRoomCheck;
+
+    // Почему проём не подходит (null — подходит)
+    string Reject(Opening o, MRUKRoom room)
+    {
+        Vector3 n = o.anchor.transform.forward;
+        if (Mathf.Abs(n.y) > maxNormalTilt) return $"наклонён (нормаль y={n.y:F2})";
+
+        Vector3 c = o.Center;
+        bool onWall = false;
+        foreach (var w in room.WallAnchors)
+        {
+            if (w == null || !w.PlaneRect.HasValue) continue;
+            Vector3 l = w.transform.InverseTransformPoint(c);
+            Rect r = w.PlaneRect.Value;
+            if (Mathf.Abs(l.z) <= maxDistanceToWall && l.x > r.xMin - 0.2f && l.x < r.xMax + 0.2f && l.y > r.yMin - 0.2f && l.y < r.yMax + 0.2f)
+            { onWall = true; break; }
+        }
+        if (!onWall && room.WallAnchors.Count > 0) return "не лежит на стене комнаты";
+
+        foreach (var other in _openings)
+            if ((other.Center - c).magnitude < duplicateDistance && Vector3.Dot(other.Inward, n) > 0.9f) return "дубль";
+        return null;
     }
 
     static float? FloorY(MRUKRoom room)
@@ -156,6 +208,13 @@ public class OpeningDetector : MonoBehaviour
             var o = _openings[debugFitIndex]; debugFitIndex = -1;
             var b = FindFirstObjectByType<GateBuilder>();
             if (b) { b.PlaceInOpening(o.BottomCenter, o.Inward); b.Build(o.WidthM, o.HeightM); }
+        }
+        // Перешли в другую комнату разметки — пересобрать
+        if (onlyCurrentRoom && MRUK.Instance != null && MRUK.Instance.IsInitialized && Time.time >= _nextRoomCheck)
+        {
+            _nextRoomCheck = Time.time + 1f;
+            var cur = MRUK.Instance.GetCurrentRoom();
+            if (cur != null && cur != _room) Rebuild();
         }
         if (_openings.Count == 0) return;
         if (_head == null)
