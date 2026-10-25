@@ -38,6 +38,11 @@
   Направляющие строятся процедурно. Пружин всегда две. Проверка в редакторе (Play Mode): поля debugProgress
   и debugSnapshot (снимки в Logs/gate_preview_*.png). Кнопка «Вписать ворота в проём» в меню на ладони
   собирает ворота по замеру DISTO.
+- `OpeningDetector.cs` (объект OpeningDetector) + префаб MRUK (DataSource = Device) — проёмы из разметки пространства
+  Quest (DOOR_FRAME, WINDOW_FRAME): голубая рамка с размером, проём под взглядом — белый и пульсирует. Кнопка
+  «Вписать в проём» ставит ворота в выбранный проём (GateBuilder.PlaceInOpening: низ — на пол, +X — в комнату),
+  размер — по DISTO, если измерен, иначе по разметке. Проверка в редакторе: DataSource = DeviceWithPrefabFallback
+  (тестовые комнаты MRUK) и поле debugFitIndex. В манифест нужен USE_SCENE (sceneSupport=Required в OculusProjectConfig).
 - `Assets/Editor/ArGatesProjectSetup.cs` — пункт меню для Player Settings.
 
 ## Подключение Claude к Unity

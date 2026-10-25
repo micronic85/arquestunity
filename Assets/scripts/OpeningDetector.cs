@@ -1,0 +1,203 @@
+using System.Collections.Generic;
+using Meta.XR.MRUtilityKit;
+using TMPro;
+using UnityEngine;
+
+/// <summary>
+/// Подсветка проёмов из разметки пространства Quest (MR Utility Kit): двери/окна обводятся рамкой
+/// с размером, проём, на который смотрит пользователь, выделяется ярче — его берёт кнопка
+/// «Вписать ворота в проём» (GateColorPicker → GateBuilder.PlaceInOpening).
+/// Проёмы появляются после «Настройки пространства» в шлеме (двери/окна нужно отметить, если шлем не нашёл их сам).
+/// </summary>
+public class OpeningDetector : MonoBehaviour
+{
+    [Header("Что подсвечивать")]
+    public MRUKAnchor.SceneLabels labels = MRUKAnchor.SceneLabels.DOOR_FRAME | MRUKAnchor.SceneLabels.WINDOW_FRAME;
+    public bool showHighlights = true;
+
+    [Header("Вид")]
+    public Material lineMaterial;
+    public Material selectedMaterial;
+    public float lineWidth = 0.025f;
+    [Tooltip("Насколько рамка отодвинута от стены в комнату, м")]
+    public float wallOffset = 0.02f;
+
+    [Header("Выбор взглядом")]
+    public float maxDistance = 10f;
+    [Tooltip("Минимальный косинус угла между взглядом и направлением на проём")]
+    public float minLookDot = 0.6f;
+
+    public bool debugLogs = false;
+    [Tooltip("Проверка в редакторе: вписать ворота в проём с этим номером (-1 — нет)")]
+    public int debugFitIndex = -1;
+
+    public class Opening
+    {
+        public MRUKAnchor anchor;
+        public Rect rect;
+        public Transform root;
+        public Renderer[] bars;
+        public TextMeshPro label;
+        public float WidthM => rect.width;
+        public float HeightM => rect.height;
+        public Vector3 Center => anchor.transform.TransformPoint(new Vector3(rect.center.x, rect.center.y, 0));
+        /// <summary>Середина нижней кромки проёма (пол), мир.</summary>
+        public Vector3 BottomCenter
+        {
+            get
+            {
+                var p = anchor.transform.TransformPoint(new Vector3(rect.center.x, rect.yMin, 0));
+                if (floorY.HasValue && Mathf.Abs(p.y - floorY.Value) < 0.3f) p.y = floorY.Value; // низ проёма — на пол
+                return p;
+            }
+        }
+        public float? floorY;
+        /// <summary>Нормаль стены в сторону комнаты.</summary>
+        public Vector3 Inward => anchor.transform.forward;
+    }
+
+    public IReadOnlyList<Opening> Openings => _openings;
+    public Opening Selected { get; private set; }
+    public string Status { get; private set; } = "загрузка разметки пространства…";
+    public event System.Action Changed;
+
+    readonly List<Opening> _openings = new List<Opening>();
+    Transform _head;
+
+    void Start()
+    {
+        if (MRUK.Instance == null) { Status = "нет MRUK в сцене"; Changed?.Invoke(); return; }
+        MRUK.Instance.RegisterSceneLoadedCallback(Rebuild);
+    }
+
+    public void Rebuild()
+    {
+        foreach (var o in _openings) if (o.root) Destroy(o.root.gameObject);
+        _openings.Clear();
+        Selected = null;
+
+        if (MRUK.Instance != null)
+            foreach (var room in MRUK.Instance.Rooms)
+                foreach (var a in room.Anchors)
+                {
+                    if (!a.HasAnyLabel(labels) || !a.PlaneRect.HasValue) continue;
+                    var o = new Opening { anchor = a, rect = a.PlaneRect.Value, floorY = FloorY(room) };
+                    if (showHighlights) BuildHighlight(o);
+                    _openings.Add(o);
+                }
+
+        Status = _openings.Count > 0
+            ? $"проёмов найдено: {_openings.Count}"
+            : "проёмы не найдены — отметьте дверь в настройке пространства";
+        if (debugLogs)
+            foreach (var o in _openings)
+                Debug.Log($"OpeningDetector: {o.anchor.Label} {o.WidthM * 1000:0}×{o.HeightM * 1000:0} мм at {o.BottomCenter}");
+        Changed?.Invoke();
+    }
+
+    static float? FloorY(MRUKRoom room)
+    {
+        foreach (var f in room.FloorAnchors) if (f) return f.transform.position.y;
+        return null;
+    }
+
+    void BuildHighlight(Opening o)
+    {
+        var root = new GameObject("Opening_" + o.anchor.name).transform;
+        root.SetParent(o.anchor.transform, false);
+        root.localPosition = new Vector3(0, 0, wallOffset);
+        o.root = root;
+
+        Rect r = o.rect;
+        float t = lineWidth;
+        var bars = new List<Renderer>
+        {
+            Bar(root, new Vector3(r.center.x, r.yMax, 0), new Vector3(r.width + t, t, t)),
+            Bar(root, new Vector3(r.center.x, r.yMin, 0), new Vector3(r.width + t, t, t)),
+            Bar(root, new Vector3(r.xMin, r.center.y, 0), new Vector3(t, r.height + t, t)),
+            Bar(root, new Vector3(r.xMax, r.center.y, 0), new Vector3(t, r.height + t, t)),
+        };
+        o.bars = bars.ToArray();
+
+        var go = new GameObject("Size", typeof(RectTransform));
+        go.transform.SetParent(root, false);
+        go.transform.localPosition = new Vector3(r.center.x, r.yMax + 0.08f, 0);
+        go.transform.localRotation = Quaternion.Euler(0, 180f, 0); // текст читается из комнаты
+        var tmp = go.AddComponent<TextMeshPro>();
+        tmp.text = $"{o.WidthM * 1000:0} × {o.HeightM * 1000:0} мм";
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.enableAutoSizing = true; tmp.fontSizeMin = 0.05f; tmp.fontSizeMax = 1.2f;
+        tmp.rectTransform.sizeDelta = new Vector2(Mathf.Max(0.6f, r.width * 0.6f), 0.12f);
+        tmp.color = new Color(0.4f, 0.9f, 1f);
+        o.label = tmp;
+        SetMaterial(o, lineMaterial);
+    }
+
+    static Renderer Bar(Transform parent, Vector3 pos, Vector3 size)
+    {
+        var c = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        Destroy(c.GetComponent<Collider>());
+        c.transform.SetParent(parent, false);
+        c.transform.localPosition = pos;
+        c.transform.localScale = size;
+        return c.GetComponent<Renderer>();
+    }
+
+    static void SetMaterial(Opening o, Material m)
+    {
+        if (m == null || o.bars == null) return;
+        foreach (var b in o.bars) b.sharedMaterial = m;
+    }
+
+    void Update()
+    {
+        if (debugFitIndex >= 0 && debugFitIndex < _openings.Count)
+        {
+            var o = _openings[debugFitIndex]; debugFitIndex = -1;
+            var b = FindFirstObjectByType<GateBuilder>();
+            if (b) { b.PlaceInOpening(o.BottomCenter, o.Inward); b.Build(o.WidthM, o.HeightM); }
+        }
+        if (_openings.Count == 0) return;
+        if (_head == null)
+        {
+            var rig = FindFirstObjectByType<OVRCameraRig>();
+            _head = rig ? rig.centerEyeAnchor : (Camera.main ? Camera.main.transform : null);
+            if (_head == null) return;
+        }
+
+        Opening best = null; float bestDot = minLookDot;
+        foreach (var o in _openings)
+        {
+            if (o.anchor == null) continue;
+            Vector3 d = o.Center - _head.position;
+            if (d.magnitude > maxDistance) continue;
+            float dot = Vector3.Dot(_head.forward, d.normalized);
+            if (dot > bestDot) { bestDot = dot; best = o; }
+        }
+        if (best != Selected)
+        {
+            if (Selected != null) { SetMaterial(Selected, lineMaterial); if (Selected.label) Selected.label.color = new Color(0.4f, 0.9f, 1f); }
+            Selected = best;
+            if (Selected != null) { SetMaterial(Selected, selectedMaterial); if (Selected.label) Selected.label.color = Color.white; }
+            Changed?.Invoke();
+        }
+
+        // лёгкая пульсация выбранного проёма
+        if (Selected?.bars != null)
+        {
+            float k = 1f + 0.35f * Mathf.Sin(Time.time * 4f);
+            foreach (var b in Selected.bars)
+            {
+                var s = b.transform.localScale;
+                if (s.x > s.y) s.y = lineWidth * k; else s.x = lineWidth * k;
+                b.transform.localScale = s;
+            }
+        }
+    }
+
+    public void SetVisible(bool v)
+    {
+        showHighlights = v;
+        foreach (var o in _openings) if (o.root) o.root.gameObject.SetActive(v);
+    }
+}

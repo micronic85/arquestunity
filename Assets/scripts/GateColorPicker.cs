@@ -73,6 +73,9 @@ public class GateColorPicker : MonoBehaviour
     [Tooltip("Адаптивные ворота; пусто — возьмётся с этого объекта")]
     public GateBuilder builder;
 
+    [Tooltip("Проёмы из разметки пространства; пусто — найдётся в сцене")]
+    public OpeningDetector openings;
+
     [Header("Measure")]
     [Tooltip("Замер рулеткой DISTO; пусто — найдётся в сцене, если есть")]
     public DistoMeasure measure;
@@ -112,7 +115,7 @@ public class GateColorPicker : MonoBehaviour
     readonly List<Button> _buttons = new List<Button>();
 
     // Блок замера
-    TextMeshPro _widthText, _heightText, _statusText, _openText;
+    TextMeshPro _widthText, _heightText, _statusText, _openText, _fitText;
     Transform _widthBtn, _heightBtn, _fieldHighlight;
 
     bool _menuVisible;
@@ -125,6 +128,7 @@ public class GateColorPicker : MonoBehaviour
         if (builder == null) builder = GetComponent<GateBuilder>();
         CollectMaterials();
         if (builder != null) builder.Built += RefreshTargets;
+        if (openings == null) openings = FindFirstObjectByType<OpeningDetector>();
         if (measure == null) measure = FindFirstObjectByType<DistoMeasure>();
         BuildMenu();
         if (measure != null) { measure.Changed += RefreshMeasure; RefreshMeasure(); }
@@ -181,17 +185,25 @@ public class GateColorPicker : MonoBehaviour
         if (debugLogs) Debug.Log($"GateColorPicker: targets refreshed = {_targets.Count}");
     }
 
+    // Вписать ворота: место — проём из разметки (на который смотрим), размер — замер DISTO, а если его нет — разметка
     void FitToOpening()
     {
-        if (builder == null || measure == null) return;
-        if (!measure.Width.HasValue || !measure.Height.HasValue)
+        if (builder == null) return;
+        var op = openings != null ? openings.Selected : null;
+        bool measured = measure != null && measure.Width.HasValue && measure.Height.HasValue;
+        if (!measured && op == null)
         {
-            if (_statusText != null) _statusText.text = "сначала измерьте ширину и высоту";
+            SetStatus("посмотрите на подсвеченный проём или измерьте ширину и высоту");
             return;
         }
-        builder.Build(measure.Width.Value / 1000f, measure.Height.Value / 1000f);
-        if (_statusText != null) _statusText.text = $"ворота под проём {DistoMeasure.Format(measure.Width)} × {DistoMeasure.Format(measure.Height)}";
+        float w = measured ? measure.Width.Value / 1000f : op.WidthM;
+        float h = measured ? measure.Height.Value / 1000f : op.HeightM;
+        if (op != null) builder.PlaceInOpening(op.BottomCenter, op.Inward);
+        builder.Build(w, h);
+        SetStatus($"ворота {w * 1000:0} × {h * 1000:0} мм " + (measured ? "(по DISTO)" : "(по разметке)") + (op != null ? " в проёме" : ""));
     }
+
+    void SetStatus(string s) { if (_statusText != null) _statusText.text = s; }
 
     // glTFast-шейдеры: baseColorFactor / roughnessFactor; URP Lit: _BaseColor / _Smoothness
     static void SetColor(Material m, Color c)
@@ -322,8 +334,8 @@ public class GateColorPicker : MonoBehaviour
         // Вписать адаптивные ворота в измеренный проём
         if (builder != null)
         {
-            PanelButton("FitBtn", new Vector3(0, y - smallH * 0.5f, 0), width, smallH, out var fitText, FitToOpening);
-            fitText.text = "Вписать ворота в проём";
+            PanelButton("FitBtn", new Vector3(0, y - smallH * 0.5f, 0), width, smallH, out _fitText, FitToOpening);
+            _fitText.text = "Вписать ворота в проём";
             y -= smallH;
         }
         return y;
@@ -425,6 +437,11 @@ public class GateColorPicker : MonoBehaviour
         else if (_menuVisible && facing < hideDot) SetMenuVisible(false);
         if (!_menuVisible) return;
 
+        if (_fitText != null)
+        {
+            var op = openings != null ? openings.Selected : null;
+            _fitText.text = op != null ? $"Вписать в проём {op.WidthM * 1000:0}×{op.HeightM * 1000:0}" : "Вписать ворота в проём";
+        }
         if (_openText != null && builder != null)
             _openText.text = builder.OpenOrOpening ? "Закрыть ворота" : "Открыть ворота";
 

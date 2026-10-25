@@ -154,6 +154,20 @@ public class GateBuilder : MonoBehaviour
 
     // ---------- API ----------
 
+    /// <summary>
+    /// Поставить ворота в проём: bottomCenter — середина нижней кромки проёма (на полу),
+    /// inward — нормаль стены в сторону помещения (туда уходят горизонтальные направляющие).
+    /// </summary>
+    public void PlaceInOpening(Vector3 bottomCenter, Vector3 inward)
+    {
+        inward.y = 0;
+        if (inward.sqrMagnitude < 1e-4f) inward = transform.right;
+        inward.Normalize();
+        transform.localScale = Vector3.one; // примерка 1:1
+        transform.rotation = Quaternion.LookRotation(Vector3.Cross(inward, Vector3.up), Vector3.up);
+        transform.position = bottomCenter - transform.TransformVector(modelOffset);
+    }
+
     /// <summary>Собрать ворота под проём (м).</summary>
     public void Build(float width, float height)
     {
