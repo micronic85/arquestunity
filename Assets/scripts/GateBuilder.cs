@@ -135,7 +135,7 @@ public class GateBuilder : MonoBehaviour
         cam.fieldOfView = 40f;
         Vector3 c = _root.TransformPoint(new Vector3(1.2f, CurtainHeight * 0.6f, 0));
         float dist = Mathf.Max(CurtainWidth, CurtainHeight + 2f) * 1.9f;
-        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero) };
+        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero), ("botL", Vector3.zero), ("botR", Vector3.zero), ("user", Vector3.zero) };
         var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
         foreach (var (name, dir) in views)
         {
@@ -145,6 +145,23 @@ public class GateBuilder : MonoBehaviour
                 float zl = -(CurtainWidth * 0.5f + trackSideGap), yl = _lv + liftRadius - trackOffset;
                 cam.transform.position = _root.TransformPoint(new Vector3(liftRadius + 0.05f, yl + 0.12f, zl + 0.25f));
                 cam.transform.LookAt(_root.TransformPoint(new Vector3(liftRadius + 0.15f * _lh + 0.6f, yl + 0.15f, zl)), Vector3.up);
+            }
+            else if (name == "botL" || name == "botR")
+            {
+                // ортографически снизу вверх на передний подвес: сечение направляющей и низ полосы
+                float sz = name == "botL" ? -1f : 1f;
+                float zt = sz * (CurtainWidth * 0.5f + trackSideGap);
+                float xh = liftRadius + 0.219f * _lh;
+                cam.orthographic = true; cam.orthographicSize = 0.15f;
+                cam.transform.position = _root.TransformPoint(new Vector3(xh, 0.5f, zt));
+                cam.transform.LookAt(_root.TransformPoint(new Vector3(xh, 5f, zt)), _root.TransformDirection(Vector3.right));
+            }
+            else if (name == "user")
+            {
+                // примерно как на скриншоте из очков: стоим в гараже левее середины, лицом к воротам, голова сильно запрокинута
+                cam.orthographic = false; cam.fieldOfView = 90f;
+                cam.transform.position = _root.TransformPoint(new Vector3(1.6f, 1.7f, -0.35f));
+                cam.transform.rotation = _root.rotation * Quaternion.LookRotation(new Vector3(-0.35f, 1f, 0.15f), new Vector3(-1f, 0.3f, 0f));
             }
             else if (name == "under")
             {
@@ -454,7 +471,7 @@ public class GateBuilder : MonoBehaviour
                 float side = Mathf.Sign(b.center.z);
                 float footZ = side * (Mathf.Max(Mathf.Abs(b.min.z), Mathf.Abs(b.max.z)) - 0.04f);
                 float trackBottom = _lv + liftRadius - trackOffset - trackProfile.x * 0.5f;
-                float stripZ = side * (CurtainWidth * 0.5f + trackSideGap - trackProfile.y * 0.5f - 0.006f);
+                float stripZ = side * (CurtainWidth * 0.5f + trackSideGap - trackProfile.y * 0.5f + 0.012f); // +12 мм: полоса в модели наклонена, по габариту низа она выходит на ~14 мм внутрь — прижимаем к профилю с нахлёстом
                 Wrap(hw, p, Vector3.one, new Vector3(liftRadius + f * _lh - b.center.x, trackBottom - b.min.y, stripZ - footZ));
                 continue;
             }
