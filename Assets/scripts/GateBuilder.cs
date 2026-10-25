@@ -135,11 +135,25 @@ public class GateBuilder : MonoBehaviour
         cam.fieldOfView = 40f;
         Vector3 c = _root.TransformPoint(new Vector3(1.2f, CurtainHeight * 0.6f, 0));
         float dist = Mathf.Max(CurtainWidth, CurtainHeight + 2f) * 1.9f;
-        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero) };
+        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero) };
         var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
         foreach (var (name, dir) in views)
         {
-            if (name == "corner")
+            if (name == "hanger")
+            {
+                // вдоль левой горизонтальной направляющей на передний подвес: видно сечение профиля и полосу подвеса
+                float zl = -(CurtainWidth * 0.5f + trackSideGap), yl = _lv + liftRadius - trackOffset;
+                cam.transform.position = _root.TransformPoint(new Vector3(liftRadius + 0.05f, yl + 0.12f, zl + 0.25f));
+                cam.transform.LookAt(_root.TransformPoint(new Vector3(liftRadius + 0.15f * _lh + 0.6f, yl + 0.15f, zl)), Vector3.up);
+            }
+            else if (name == "under")
+            {
+                // как из очков: стоим в гараже у ворот и смотрим вверх на подвесы и барабаны
+                cam.transform.position = _root.TransformPoint(new Vector3(1.6f, 1.6f, 0.1f));
+                cam.transform.LookAt(_root.TransformPoint(new Vector3(0.4f, _lv + liftRadius + 0.2f, 0f)), Vector3.up);
+                cam.fieldOfView = 80f;
+            }
+            else if (name == "corner")
             {
                 // крупно верхний угол: вертикальная направляющая, дуга, кронштейн барабана, подвесы (вид изнутри снизу)
                 Vector3 target = _root.TransformPoint(new Vector3(0.6f, CurtainHeight + 0.3f, CurtainWidth * 0.5f));
@@ -435,13 +449,13 @@ public class GateBuilder : MonoBehaviour
                 const float R0 = 0.4f, LH0 = D0 - R0;
                 float f = Mathf.Clamp01((b.center.x - R0) / LH0);
                 // Подвес Г-образный: крюк наверху уходит внутрь, а полоса с низом — у внешнего края габарита
-                // (в модели низ полосы в 40 мм от него). Ставим по полосе, низ — до оси профиля,
-                // чтобы подвес выглядел прикрученным к боку направляющей.
+                // (в модели низ полосы в 40 мм от него). Как в модели и на монтаже, полоса прикручена
+                // к внутреннему боку профиля и доходит до его низа — снизу видно, что она держит направляющую.
                 float side = Mathf.Sign(b.center.z);
                 float footZ = side * (Mathf.Max(Mathf.Abs(b.min.z), Mathf.Abs(b.max.z)) - 0.04f);
-                float trackY = _lv + liftRadius - trackOffset;
-                float trackZ = side * (CurtainWidth * 0.5f + trackSideGap);
-                Wrap(hw, p, Vector3.one, new Vector3(liftRadius + f * _lh - b.center.x, trackY - b.min.y, trackZ - footZ));
+                float trackBottom = _lv + liftRadius - trackOffset - trackProfile.x * 0.5f;
+                float stripZ = side * (CurtainWidth * 0.5f + trackSideGap - trackProfile.y * 0.5f - 0.006f);
+                Wrap(hw, p, Vector3.one, new Vector3(liftRadius + f * _lh - b.center.x, trackBottom - b.min.y, stripZ - footZ));
                 continue;
             }
             if (springZ.TryGetValue(p, out var spz)) { scz = spz.scale; dz = spz.dz; }
