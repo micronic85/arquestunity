@@ -434,9 +434,14 @@ public class GateBuilder : MonoBehaviour
                 // вдоль — в той же доле длины горизонтали, что и в исходной модели
                 const float R0 = 0.4f, LH0 = D0 - R0;
                 float f = Mathf.Clamp01((b.center.x - R0) / LH0);
-                float trackY = _lv + liftRadius - trackOffset + trackProfile.x * 0.5f;
-                float trackZ = Mathf.Sign(b.center.z) * (CurtainWidth * 0.5f + trackSideGap);
-                Wrap(hw, p, Vector3.one, new Vector3(liftRadius + f * _lh - b.center.x, trackY - b.min.y, trackZ - b.center.z));
+                // Подвес Г-образный: крюк наверху уходит внутрь, а полоса с низом — у внешнего края габарита
+                // (в модели низ полосы в 40 мм от него). Ставим по полосе, низ — до оси профиля,
+                // чтобы подвес выглядел прикрученным к боку направляющей.
+                float side = Mathf.Sign(b.center.z);
+                float footZ = side * (Mathf.Max(Mathf.Abs(b.min.z), Mathf.Abs(b.max.z)) - 0.04f);
+                float trackY = _lv + liftRadius - trackOffset;
+                float trackZ = side * (CurtainWidth * 0.5f + trackSideGap);
+                Wrap(hw, p, Vector3.one, new Vector3(liftRadius + f * _lh - b.center.x, trackY - b.min.y, trackZ - footZ));
                 continue;
             }
             if (springZ.TryGetValue(p, out var spz)) { scz = spz.scale; dz = spz.dz; }
