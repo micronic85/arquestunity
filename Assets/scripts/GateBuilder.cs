@@ -716,8 +716,7 @@ public class GateBuilder : MonoBehaviour
     Material _rubber;
 
     // Нижний уплотнитель уже есть в модели (Section_1/«резинка»): делаем его чёрным.
-    // Верхний — на перемычке над проёмом: профиль с резиновым лепестком, прижатым к лицу верхней панели снаружи.
-    // Он неподвижен (крепится к стене), поэтому висит на _root, а не на секции.
+    // Верхний — резиновый профиль на верхней кромке верхней секции (как у DoorHan): едет вместе с ней.
     void BuildSeals()
     {
         var rubber = RubberMaterial();
@@ -733,12 +732,14 @@ public class GateBuilder : MonoBehaviour
                         break;
                     }
 
+        if (_sections.Count == 0) return;
+        var topSec = _sections[_sections.Count - 1];
         var top = new GameObject("TopSeal").transform;
-        top.SetParent(_root, false);
-        float hc = CurtainHeight, half = CurtainWidth * 0.5f + 0.02f;
-        // x < 0 — улица; лицо панели около x = -0.064
-        AddBox(top, "Lip", new Vector3(-0.072f, hc - 0.012f, 0f), new Vector3(0.012f, 0.06f, 2f * half), rubber);
-        AddBox(top, "Base", new Vector3(-0.086f, hc + 0.025f, 0f), new Vector3(0.018f, 0.06f, 2f * half), rubber);
+        top.SetParent(topSec, false);
+        float h = _heights[_sections.Count - 1], cw = CurtainWidth;
+        // в координатах секции: низ — шарнир (y = 0), x < 0 — улица, панель от x ≈ -0.064 до -0.02
+        AddBox(top, "Cap", new Vector3(-0.044f, h + 0.008f, 0f), new Vector3(0.05f, 0.018f, cw), rubber);
+        AddBox(top, "Lip", new Vector3(-0.069f, h - 0.004f, 0f), new Vector3(0.009f, 0.04f, cw), rubber);
     }
 
     static void AddBox(Transform parent, string name, Vector3 center, Vector3 size, Material mat)
