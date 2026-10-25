@@ -7592,6 +7592,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::OpeningDetector
   labels: 96
   showHighlights: 1
+  onlyCurrentRoom: 1
+  maxNormalTilt: 0.2
+  maxDistanceToWall: 0.25
+  duplicateDistance: 0.3
   lineMaterial: {fileID: 2100000, guid: 05ae9a1bc5507114d8466093180ebe1f, type: 2}
   selectedMaterial: {fileID: 2100000, guid: e982969cac2564446a18e669d7b56039, type: 2}
   lineWidth: 0.025
@@ -28021,7 +28025,7 @@ MonoBehaviour:
   sectionStep: 0.025
   liftRadius: 0.4
   horizontalExtra: 0.65
-  trackSideGap: 0.05
+  trackSideGap: 0.07
   trackOffset: 0.06
   trackProfile: {x: 0.07, y: 0.04}
   fullOpenTime: 6
