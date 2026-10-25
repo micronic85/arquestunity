@@ -135,7 +135,7 @@ public class GateBuilder : MonoBehaviour
         cam.fieldOfView = 40f;
         Vector3 c = _root.TransformPoint(new Vector3(1.2f, CurtainHeight * 0.6f, 0));
         float dist = Mathf.Max(CurtainWidth, CurtainHeight + 2f) * 1.9f;
-        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero), ("botL", Vector3.zero), ("botR", Vector3.zero), ("user", Vector3.zero) };
+        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero), ("botL", Vector3.zero), ("botR", Vector3.zero), ("user", Vector3.zero), ("seals", Vector3.zero) };
         var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
         foreach (var (name, dir) in views)
         {
@@ -155,6 +155,13 @@ public class GateBuilder : MonoBehaviour
                 cam.orthographic = true; cam.orthographicSize = 0.15f;
                 cam.transform.position = _root.TransformPoint(new Vector3(xh, 0.5f, zt));
                 cam.transform.LookAt(_root.TransformPoint(new Vector3(xh, 5f, zt)), _root.TransformDirection(Vector3.right));
+            }
+            else if (name == "seals")
+            {
+                // снаружи у правого края: нижний и верхний уплотнители, торец стойки
+                cam.orthographic = false; cam.fieldOfView = 50f;
+                cam.transform.position = _root.TransformPoint(new Vector3(-0.9f, 0.35f, CurtainWidth * 0.5f + 0.4f));
+                cam.transform.LookAt(_root.TransformPoint(new Vector3(0f, 0.05f, CurtainWidth * 0.25f)), Vector3.up);
             }
             else if (name == "user")
             {
@@ -300,6 +307,7 @@ public class GateBuilder : MonoBehaviour
         BuildHardware(kW);
         BuildTrack(+1);
         BuildTrack(-1);
+        BuildSeals();
         AttachHandle();
         ApplyPose();
 
@@ -354,6 +362,10 @@ public class GateBuilder : MonoBehaviour
             parts.Add(c);
             if (LocalBounds(section, c, out var bb)) bounds[c] = bb;
         }
+        if (debugLogs)
+            foreach (var kv in bounds)
+                if (kv.Key.name.StartsWith("резинка") || kv.Key.name.StartsWith("панель") || kv.Key.name.StartsWith("загиб") || kv.Key.name.StartsWith("Plane.0"))
+                    Debug.Log($"[GateBuilder] {section.name}/{kv.Key.name} min={kv.Value.min.ToString("F3")} max={kv.Value.max.ToString("F3")} active={kv.Key.gameObject.activeSelf} mat={kv.Key.GetComponentInChildren<Renderer>()?.sharedMaterial?.name}");
 
         // Калитка: её положение по ширине (детали «калитка*»)
         Bounds? wicket = null;
@@ -466,12 +478,12 @@ public class GateBuilder : MonoBehaviour
                 const float R0 = 0.4f, LH0 = D0 - R0;
                 float f = Mathf.Clamp01((b.center.x - R0) / LH0);
                 // Подвес Г-образный: крюк наверху уходит внутрь, а полоса с низом — у внешнего края габарита
-                // (в модели низ полосы в 40 мм от него). Как в модели и на монтаже, полоса прикручена
-                // к внутреннему боку профиля и доходит до его низа — снизу видно, что она держит направляющую.
+                // (в модели низ полосы в 40 мм от него). Полоса прикручена к стенке С-профиля снаружи
+                // и доходит до его низа — снизу видно, что она держит направляющую.
                 float side = Mathf.Sign(b.center.z);
                 float footZ = side * (Mathf.Max(Mathf.Abs(b.min.z), Mathf.Abs(b.max.z)) - 0.04f);
                 float trackBottom = _lv + liftRadius - trackOffset - trackProfile.x * 0.5f;
-                float stripZ = side * (CurtainWidth * 0.5f + trackSideGap - trackProfile.y * 0.5f + 0.012f); // +12 мм: полоса в модели наклонена, по габариту низа она выходит на ~14 мм внутрь — прижимаем к профилю с нахлёстом
+                float stripZ = side * (CurtainWidth * 0.5f + trackSideGap + trackProfile.y * 0.5f + 0.014f); // к стенке С-профиля снаружи (открытая сторона профиля — к полотну, там ходят ролики); полоса в модели наклонена и по габариту низа смещена внутрь на ~14 мм
                 Wrap(hw, p, Vector3.one, new Vector3(liftRadius + f * _lh - b.center.x, trackBottom - b.min.y, stripZ - footZ));
                 continue;
             }
@@ -613,40 +625,131 @@ public class GateBuilder : MonoBehaviour
         var profileMat = FindMaterial("HorizProfile_L");
         if (profileMat) mr.sharedMaterial = profileMat;
 
-        float end = _lv + Mathf.PI * liftRadius * 0.5f + _lh;
-        var verts = new List<Vector3>(); var tris = new List<int>();
-        float hx = trackProfile.x * 0.5f, hz = trackProfile.y * 0.5f;
-        int rings = 0;
-        for (float s = 0f; ; s += 0.03f)
+        // Сечение — гнутый С-профиль (жесть ~2,5 мм) с полостью для роликов, открыт к полотну.
+        // u — вдоль нормали траектории (поперёк профиля), v — по ширине ворот наружу от полотна.
+        float H = trackProfile.x * 0.5f, D = trackProfile.y * 0.5f, t = 0.0025f, L = 0.009f;
+        var outline = new[] {
+            new Vector2(-H + L, -D), new Vector2(-H, -D), new Vector2(-H, D), new Vector2(H, D),
+            new Vector2(H, -D), new Vector2(H - L, -D), new Vector2(H - L, -D + t), new Vector2(H - t, -D + t),
+            new Vector2(H - t, D - t), new Vector2(-H + t, D - t), new Vector2(-H + t, -D + t), new Vector2(-H + L, -D + t) };
+        int m = outline.Length;
+        // внешняя нормаль каждой грани контура (2D): берём перпендикуляр, смотрящий из многоугольника
+        var segN = new Vector2[m];
+        for (int k = 0; k < m; k++)
         {
-            if (s > end) s = end;
-            Vector2 p = PathPoint(s), tg = PathTangent(s);
+            Vector2 a = outline[k], b = outline[(k + 1) % m], d = (b - a).normalized;
+            var n = new Vector2(d.y, -d.x);
+            if (PointInPolygon(outline, (a + b) * 0.5f + n * 0.0005f)) n = -n;
+            segN[k] = n;
+        }
+
+        // Кольца: концы прямых участков и частые точки на дуге
+        float arc = Mathf.PI * liftRadius * 0.5f, end = _lv + arc + _lh;
+        var ss = new List<float> { 0f };
+        for (int k = 0; k <= 24; k++) ss.Add(_lv + arc * k / 24f);
+        ss.Add(end);
+
+        Vector3 vdir = Vector3.forward * side;
+        var verts = new List<Vector3>(); var norms = new List<Vector3>(); var tris = new List<int>();
+        for (int r = 0; r < ss.Count; r++)
+        {
+            Vector2 p = PathPoint(ss[r]), tg = PathTangent(ss[r]);
             Vector2 nrm = new Vector2(tg.y, -tg.x); // внутрь гаража / вниз
             Vector2 c = p + nrm * trackOffset;
-            Vector3 n3 = new Vector3(nrm.x, nrm.y, 0);
-            Vector3 c3 = new Vector3(c.x, c.y, 0);
-            verts.Add(c3 - n3 * hx - Vector3.forward * hz);
-            verts.Add(c3 + n3 * hx - Vector3.forward * hz);
-            verts.Add(c3 + n3 * hx + Vector3.forward * hz);
-            verts.Add(c3 - n3 * hx + Vector3.forward * hz);
-            if (rings > 0)
+            Vector3 n3 = new Vector3(nrm.x, nrm.y, 0), c3 = new Vector3(c.x, c.y, 0);
+            for (int k = 0; k < m; k++)
             {
-                int a = (rings - 1) * 4, b = rings * 4;
-                for (int k = 0; k < 4; k++)
-                {
-                    int k1 = (k + 1) % 4;
-                    tris.AddRange(new[] { a + k, b + k, b + k1, a + k, b + k1, a + k1 });
-                }
+                Vector2 a = outline[k], b = outline[(k + 1) % m];
+                Vector3 nn = (n3 * segN[k].x + vdir * segN[k].y).normalized;
+                verts.Add(c3 + n3 * a.x + vdir * a.y); norms.Add(nn);
+                verts.Add(c3 + n3 * b.x + vdir * b.y); norms.Add(nn);
             }
-            rings++;
-            if (s >= end) break;
+            if (r == 0) continue;
+            int pa = (r - 1) * m * 2, pb = r * m * 2;
+            for (int k = 0; k < m; k++)
+            {
+                int a0 = pa + k * 2, a1 = a0 + 1, b0 = pb + k * 2, b1 = b0 + 1;
+                // порядок вершин — чтобы лицевая сторона смотрела по внешней нормали
+                Vector3 cr = Vector3.Cross(verts[b0] - verts[a0], verts[b1] - verts[a0]);
+                if (Vector3.Dot(cr, norms[a0]) > 0) tris.AddRange(new[] { a0, b0, b1, a0, b1, a1 });
+                else tris.AddRange(new[] { a0, b1, b0, a0, a1, b1 });
+            }
         }
         var mesh = new Mesh { name = go.name };
         mesh.SetVertices(verts);
+        mesh.SetNormals(norms);
         mesh.SetTriangles(tris, 0);
-        mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         mf.sharedMesh = mesh;
+    }
+
+    static bool PointInPolygon(Vector2[] poly, Vector2 q)
+    {
+        bool inside = false;
+        for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
+            if ((poly[i].y > q.y) != (poly[j].y > q.y) &&
+                q.x < (poly[j].x - poly[i].x) * (q.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x)
+                inside = !inside;
+        return inside;
+    }
+
+    // ---------- уплотнители ----------
+
+    // Резина: матовый чёрный на основе материала оконного уплотнителя из модели (или профиля)
+    Material RubberMaterial()
+    {
+        if (_rubber) return _rubber;
+        Material baseMat = null;
+        foreach (var r in _templates.GetComponentsInChildren<Renderer>(true))
+            foreach (var mat in r.sharedMaterials)
+                if (baseMat == null && mat && mat.name.StartsWith("резинка.003")) baseMat = mat;
+        if (baseMat == null) baseMat = FindMaterial("HorizProfile_L");
+        // своя матовая копия: у оконной резинки блик, снизу полоса выглядела синеватой
+        _rubber = baseMat ? new Material(baseMat) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        _rubber.name = "GateRubber";
+        if (_rubber.HasProperty("baseColorFactor")) _rubber.SetColor("baseColorFactor", new Color(0.04f, 0.04f, 0.045f));
+        if (_rubber.HasProperty("_BaseColor")) _rubber.SetColor("_BaseColor", new Color(0.04f, 0.04f, 0.045f));
+        if (_rubber.HasProperty("metallicFactor")) _rubber.SetFloat("metallicFactor", 0f);
+        if (_rubber.HasProperty("roughnessFactor")) _rubber.SetFloat("roughnessFactor", 0.85f);
+        return _rubber;
+    }
+    Material _rubber;
+
+    // Нижний уплотнитель уже есть в модели (Section_1/«резинка»): делаем его чёрным.
+    // Верхний — на перемычке над проёмом: профиль с резиновым лепестком, прижатым к лицу верхней панели снаружи.
+    // Он неподвижен (крепится к стене), поэтому висит на _root, а не на секции.
+    void BuildSeals()
+    {
+        var rubber = RubberMaterial();
+        foreach (var sec in _sections)
+            foreach (var r in sec.GetComponentsInChildren<Renderer>(true))
+                for (var t = r.transform; t != null && t != sec; t = t.parent)
+                    if (t.name == "резинка")
+                    {
+                        var mats = r.sharedMaterials; for (int k = 0; k < mats.Length; k++) mats[k] = rubber; r.sharedMaterials = mats;
+                        // в модели резинка почти вся спрятана в панели: делаем толще наружу (от плоскости x = 0 секции) и чуть ниже
+                        var w = t.parent;
+                        if (w != null && w.name == "резинка_w" && w.localScale.x < 1.01f) w.localScale = Vector3.Scale(w.localScale, new Vector3(1.5f, 1.4f, 1f));
+                        break;
+                    }
+
+        var top = new GameObject("TopSeal").transform;
+        top.SetParent(_root, false);
+        float hc = CurtainHeight, half = CurtainWidth * 0.5f + 0.02f;
+        // x < 0 — улица; лицо панели около x = -0.064
+        AddBox(top, "Lip", new Vector3(-0.072f, hc - 0.012f, 0f), new Vector3(0.012f, 0.06f, 2f * half), rubber);
+        AddBox(top, "Base", new Vector3(-0.086f, hc + 0.025f, 0f), new Vector3(0.018f, 0.06f, 2f * half), rubber);
+    }
+
+    static void AddBox(Transform parent, string name, Vector3 center, Vector3 size, Material mat)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = name;
+        Destroy(go.GetComponent<Collider>());
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = center;
+        go.transform.localScale = size;
+        go.GetComponent<MeshRenderer>().sharedMaterial = mat;
     }
 
     Material FindMaterial(string partName)
