@@ -135,6 +135,21 @@ public class GateBuilder : MonoBehaviour
     Quaternion _handleLocalRot;
     bool _handleAttached;
 
+    // Grabbable ручки по умолчанию двигает саму ручку (и физикой через Rigidbody ворот) — направляем его
+    // на невидимую «пустышку»: ручка остаётся на полотне, а ворота ведёт GateController по движению руки
+    Transform _grabProxy;
+    void DetachGrabTarget()
+    {
+        if (_grabProxy != null || handleObject == null) return;
+        _grabProxy = new GameObject("GrabProxy").transform;
+        _grabProxy.SetParent(handleObject, false);
+        foreach (var g in handleObject.GetComponentsInChildren<Oculus.Interaction.Grabbable>(true))
+        {
+            g.InjectOptionalTargetTransform(_grabProxy);
+            g.InjectOptionalThrowWhenUnselected(false);
+        }
+    }
+
     // Захват рукой (Grabbable) двигает саму ручку — возвращаем её на место на полотне каждый кадр:
     // ворота едут за рукой через GateController, а ручка остаётся прикрученной к нижней секции
     void LateUpdate()
@@ -623,6 +638,7 @@ public class GateBuilder : MonoBehaviour
         foreach (var r in target.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
         handleObject.position += tb.Value.center - hb.Value.center;
         handleObject.SetParent(_sections[0], true);
+        DetachGrabTarget();
         _handleLocalPos = handleObject.localPosition;
         _handleLocalRot = handleObject.localRotation;
         _handleAttached = true;
