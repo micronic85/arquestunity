@@ -154,7 +154,8 @@ public class GateBuilder : MonoBehaviour
     // ворота едут за рукой через GateController, а ручка остаётся прикрученной к нижней секции
     void LateUpdate()
     {
-        if (!_handleAttached || handleObject == null || _sections.Count == 0 || handleObject.parent != _sections[0]) return;
+        if (!_handleAttached || handleObject == null || _sections.Count == 0) return;
+        if (handleObject.parent != _sections[0]) handleObject.SetParent(_sections[0], false);
         handleObject.localPosition = _handleLocalPos;
         handleObject.localRotation = _handleLocalRot;
     }
@@ -627,23 +628,33 @@ public class GateBuilder : MonoBehaviour
         return any;
     }
 
+    // Видимая ручка — своя ручка нижней секции (едет вместе с полотном всегда).
+    // Объект «ruchka» с захватом (ISDK) становится невидимым и лишь даёт коллайдеры для захвата рукой:
+    // его ставим на место ручки секции, а захват может двигать его как угодно — на вид это не влияет.
+    Vector3? _handleCenterLocal;
     void AttachHandle()
     {
         if (handleObject == null || _sections.Count == 0) return;
         var target = FindDeep(_sections[0], "Handle");
         if (target == null) return;
         var tb = RendererBounds(target);
-        var hb = RendererBounds(handleObject);
-        if (!tb.HasValue || !hb.HasValue) return;
-        foreach (var r in target.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
-        handleObject.position += tb.Value.center - hb.Value.center;
+        if (!tb.HasValue) return;
+        if (!_handleCenterLocal.HasValue)
+        {
+            var hb = RendererBounds(handleObject);
+            if (!hb.HasValue) return;
+            _handleCenterLocal = handleObject.InverseTransformPoint(hb.Value.center);
+            foreach (var r in handleObject.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
+        }
+        handleObject.position += tb.Value.center - handleObject.TransformPoint(_handleCenterLocal.Value);
         handleObject.SetParent(_sections[0], true);
         DetachGrabTarget();
         _handleLocalPos = handleObject.localPosition;
         _handleLocalRot = handleObject.localRotation;
         _handleAttached = true;
-        if (debugLogs) Debug.Log($"GateBuilder: ручка {hb.Value.size} → место {tb.Value.size} at {tb.Value.center}");
+        if (debugLogs) Debug.Log($"GateBuilder: ручка (захват) → место {tb.Value.size} at {tb.Value.center}");
     }
+
 
     static Bounds? RendererBounds(Transform t)
     {
