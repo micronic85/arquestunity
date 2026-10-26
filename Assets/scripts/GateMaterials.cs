@@ -61,6 +61,9 @@ public static class GateMaterials
         if (clip && src.HasProperty("alphaCutoff")) m.SetFloat("_Cutoff", src.GetFloat("alphaCutoff"));
         m.renderQueue = transparent ? 3000 : (clip ? 2450 : 2000);
 
+        // Ворота не принимают тени на себя: двойные поверхности панелей давали полосы (shadow acne);
+        // тень от ворот на пол остаётся
+        m.EnableKeyword("_RECEIVE_SHADOWS_OFF");
         Cache[src] = m;
         return m;
     }

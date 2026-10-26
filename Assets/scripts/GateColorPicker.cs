@@ -129,11 +129,11 @@ public class GateColorPicker : MonoBehaviour
     {
         if (builder == null) builder = GetComponent<GateBuilder>();
         CollectMaterials();
-        RefreshTargets();
         if (builder != null) builder.Built += RefreshTargets;
         if (openings == null) openings = FindFirstObjectByType<OpeningDetector>();
         if (measure == null) measure = FindFirstObjectByType<DistoMeasure>();
         BuildMenu();
+        RefreshTargets();
         if (measure != null) { measure.Changed += RefreshMeasure; RefreshMeasure(); }
         SetMenuVisible(false);
     }
@@ -196,6 +196,8 @@ public class GateColorPicker : MonoBehaviour
                 for (int i = 0; i < mats.Length; i++)
                     if (mats[i] != null && CleanName(mats[i].name) == targetMaterialName) _targets.Add((r, i));
             }
+        // До выбора цвета — белые панели (RAL 9003) с гофрами, а не серый материал модели
+        if (_selected < 0 && gate != null && _palette.Count > 0) _selected = 0;
         if (_selected >= 0) Apply(_selected);
         if (debugLogs) Debug.Log($"GateColorPicker: targets refreshed = {_targets.Count}");
     }
@@ -208,8 +210,29 @@ public class GateColorPicker : MonoBehaviour
         var baseMat = GateMaterials.Get(e.gate);
         if (baseMat == null || !baseMat.HasProperty("_PlanarUV")) return null;
         var m = new Material(baseMat) { name = baseMat.name + " (adaptive)" };
-        if (e.textured) { m.SetFloat("_PlanarUV", 1f); m.SetFloat("_PlanarScale", 0.6f); }
-        else { m.SetTexture("_BaseMap", null); m.SetColor("_BaseColor", e.color); }
+        bool frost = e.label.Contains("мороз");
+        if (e.textured)
+        {
+            // Дерево: текстура плоско вдоль ширины, ~2 м на повтор; волокна — по ширине
+            var tex = m.GetTexture("_BaseMap");
+            if (tex != null) tex.wrapMode = TextureWrapMode.Repeat;
+            m.SetFloat("_PlanarUV", 1f);
+            m.SetFloat("_PlanarScale", 0.33f);   // ~3 м текстуры по ширине
+            m.SetFloat("_PlanarScaleY", 1.25f);  // ~0,8 м по высоте
+            m.SetFloat("_PlanarURange", 0.84f);
+            m.SetFloat("_Stucco", 0.06f);
+            m.SetFloat("_RoughnessMin", 0.55f);
+        }
+        else
+        {
+            m.SetTexture("_BaseMap", null);
+            m.SetColor("_BaseColor", e.color);
+            m.SetFloat("_Stucco", frost ? 0.35f : 0.12f);              // «мороз» — крупнее и матовее
+            m.SetFloat("_RoughnessMin", frost ? 0.75f : 0.45f);
+        }
+        m.SetFloat("_Ribs", 1f);
+        m.SetFloat("_RibPeriod", 0.14f);
+        m.SetFloat("_RibDepth", 0.6f);
         e.adaptive = m;
         return m;
     }
@@ -454,6 +477,7 @@ public class GateColorPicker : MonoBehaviour
 
     void UpdateHighlight()
     {
+        if (_highlight == null) return;
         bool on = _selected >= 0 && _selected < _tiles.Count;
         _highlight.gameObject.SetActive(on && _menuVisible);
         if (on) _highlight.localPosition = _tiles[_selected].localPosition + new Vector3(0, 0, 0.001f);

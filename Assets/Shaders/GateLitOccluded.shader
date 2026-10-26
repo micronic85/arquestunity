@@ -22,7 +22,13 @@ Shader "VorotaKraft/GateLitOccluded"
         [Enum(Off, 0, On, 1)] _ZWrite("ZWrite", Float) = 1
         _EnvironmentDepthBias("Environment Depth Bias", Float) = 0.06
         _PlanarUV("Planar UV (object ZY)", Float) = 0
-        _PlanarScale("Planar UV scale, 1/m", Float) = 1
+        _PlanarScale("Planar V scale along width, 1/m", Float) = 0.33
+        _PlanarScaleY("Planar U scale along height, 1/m", Float) = 1.25
+        _PlanarURange("Usable U range of the texture", Float) = 0.84
+        _Ribs("Ribs (horizontal grooves)", Float) = 0
+        _RibPeriod("Rib period, m", Float) = 0.14
+        _RibDepth("Rib depth", Float) = 0.6
+        _Stucco("Stucco strength", Float) = 0
     }
 
     HLSLINCLUDE
@@ -49,6 +55,12 @@ Shader "VorotaKraft/GateLitOccluded"
         float _EnvironmentDepthBias;
         float _PlanarUV;
         float _PlanarScale;
+        float _PlanarScaleY;
+        float _PlanarURange;
+        float _Ribs;
+        float _RibPeriod;
+        float _RibDepth;
+        float _Stucco;
     CBUFFER_END
     ENDHLSL
 
@@ -81,6 +93,7 @@ Shader "VorotaKraft/GateLitOccluded"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             #pragma multi_compile_instancing
             #pragma multi_compile _ HARD_OCCLUSION SOFT_OCCLUSION
+            #pragma shader_feature_local _RECEIVE_SHADOWS_OFF
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.meta.xr.sdk.core/Shaders/EnvironmentDepth/URP/EnvironmentOcclusionURP.hlsl"
@@ -102,6 +115,7 @@ Shader "VorotaKraft/GateLitOccluded"
                 float3 normalWS : TEXCOORD2;
                 float4 tangentWS : TEXCOORD3;
                 half fogFactor : TEXCOORD4;
+                float3 positionOS : TEXCOORD6;
                 META_DEPTH_VERTEX_OUTPUT(5)
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
@@ -120,7 +134,12 @@ Shader "VorotaKraft/GateLitOccluded"
                 o.normalWS = n.normalWS;
                 o.tangentWS = float4(n.tangentWS, input.tangentOS.w * GetOddNegativeScale());
                 // У панелей адаптивных ворот нет развёртки — текстуру (дерево) кладём плоско по ширине/высоте
-                float2 uv0 = _PlanarUV > 0.5 ? input.positionOS.zy * _PlanarScale : input.uv;
+                // волокна дерева — вдоль ширины ворот (ось Z секции)
+                // Текстура дерева: волокна вдоль V; справа в ней чёрное поле (U > _PlanarURange) — берём только левую часть
+                float2 uv0 = _PlanarUV > 0.5
+                    ? float2(input.positionOS.y * _PlanarScaleY, input.positionOS.z * _PlanarScale)
+                    : input.uv;
+                o.positionOS = input.positionOS.xyz;
                 o.uv = TRANSFORM_TEX(uv0, _BaseMap);
                 o.fogFactor = ComputeFogFactor(p.positionCS.z);
                 META_DEPTH_INITIALIZE_VERTEX_OUTPUT(o, input.positionOS);
@@ -132,7 +151,9 @@ Shader "VorotaKraft/GateLitOccluded"
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
-                half4 baseCol = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
+                float2 uvS = input.uv;
+                if (_PlanarUV > 0.5) uvS.x = frac(uvS.x) * _PlanarURange;
+                half4 baseCol = SAMPLE_TEXTURE2D_GRAD(_BaseMap, sampler_BaseMap, uvS, ddx(input.uv), ddy(input.uv)) * _BaseColor;
                 if (_AlphaClip > 0.5h) clip(baseCol.a - _Cutoff);
                 half4 mr = SAMPLE_TEXTURE2D(_MRMap, sampler_MRMap, input.uv);
                 half roughness = max(_Roughness * mr.g, _RoughnessMin);
@@ -144,6 +165,30 @@ Shader "VorotaKraft/GateLitOccluded"
                 float3 bitangentWS = cross(normalWS, tangentWS) * (input.tangentWS.w > 0 ? 1.0 : -1.0);
                 half3 normalTS = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv), _BumpScale);
                 normalWS = normalize(TransformTangentToWorld(normalTS, half3x3(tangentWS, bitangentWS, normalWS)));
+
+                // Сэндвич-панель: горизонтальные гофры + мелкая «штукатурка» (stucco) — процедурно, без UV
+                float3 upWS = normalize(TransformObjectToWorldDir(float3(0, 1, 0)));
+                float3 sideWS = normalize(TransformObjectToWorldDir(float3(0, 0, 1)));
+                if (_Ribs > 0.5)
+                {
+                    float t = frac(input.positionOS.y / _RibPeriod);
+                    const float w = 0.16;                       // ширина гофра — доля шага
+                    float slope = t < w ? sin(t / w * 6.2831853) : 0.0;
+                    normalWS = normalize(normalWS + upWS * slope * _RibDepth);
+                }
+                if (_Stucco > 0.001)
+                {
+                    float2 p = input.positionOS.zy * 260.0;
+                    float2 i = floor(p), f = frac(p);
+                    float h00 = frac(sin(dot(i, float2(127.1, 311.7))) * 43758.55);
+                    float h10 = frac(sin(dot(i + float2(1, 0), float2(127.1, 311.7))) * 43758.55);
+                    float h01 = frac(sin(dot(i + float2(0, 1), float2(127.1, 311.7))) * 43758.55);
+                    float h11 = frac(sin(dot(i + float2(1, 1), float2(127.1, 311.7))) * 43758.55);
+                    float2 u = f * f * (3.0 - 2.0 * f);
+                    float dx = lerp(h10 - h00, h11 - h01, u.y);
+                    float dy = lerp(h01 - h00, h11 - h10, u.x);
+                    normalWS = normalize(normalWS + (sideWS * dx + upWS * dy) * _Stucco);
+                }
 
                 SurfaceData s = (SurfaceData)0;
                 s.albedo = baseCol.rgb;
