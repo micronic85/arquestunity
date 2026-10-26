@@ -814,7 +814,7 @@ public class GateBuilder : MonoBehaviour
     {
         var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
         go.name = name;
-        Destroy(go.GetComponent<Collider>());
+        DestroyImmediate(go.GetComponent<Collider>()); // сразу: иначе HandGrabInteractable ручки успевает запомнить коллайдер и потом падает на null
         go.transform.SetParent(parent, false);
         go.transform.localPosition = center;
         go.transform.localScale = size;
