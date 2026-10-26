@@ -131,6 +131,18 @@ public class GateBuilder : MonoBehaviour
     }
 
     bool _dirty;
+    Vector3 _handleLocalPos;
+    Quaternion _handleLocalRot;
+    bool _handleAttached;
+
+    // Захват рукой (Grabbable) двигает саму ручку — возвращаем её на место на полотне каждый кадр:
+    // ворота едут за рукой через GateController, а ручка остаётся прикрученной к нижней секции
+    void LateUpdate()
+    {
+        if (!_handleAttached || handleObject == null || _sections.Count == 0 || handleObject.parent != _sections[0]) return;
+        handleObject.localPosition = _handleLocalPos;
+        handleObject.localRotation = _handleLocalRot;
+    }
     float _lastDebugProgress = -1f;
 
     // В Play Mode правка размеров в инспекторе сразу пересобирает ворота
@@ -304,6 +316,7 @@ public class GateBuilder : MonoBehaviour
     public void Rebuild()
     {
         if (_templates == null) return;
+        _handleAttached = false;
         if (handleObject != null) handleObject.SetParent(transform, true);
         if (_root != null) { _root.gameObject.SetActive(false); Destroy(_root.gameObject); }
         _sections.Clear();
@@ -610,6 +623,9 @@ public class GateBuilder : MonoBehaviour
         foreach (var r in target.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
         handleObject.position += tb.Value.center - hb.Value.center;
         handleObject.SetParent(_sections[0], true);
+        _handleLocalPos = handleObject.localPosition;
+        _handleLocalRot = handleObject.localRotation;
+        _handleAttached = true;
         if (debugLogs) Debug.Log($"GateBuilder: ручка {hb.Value.size} → место {tb.Value.size} at {tb.Value.center}");
     }
 
