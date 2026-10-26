@@ -20,7 +20,7 @@ Shader "VorotaKraft/GateLitOccluded"
         _AlphaClip("Alpha Clip", Float) = 0
         _Cutoff("Alpha Cutoff", Range(0, 1)) = 0.5
         [Enum(Off, 0, On, 1)] _ZWrite("ZWrite", Float) = 1
-        _EnvironmentDepthBias("Environment Depth Bias", Float) = 0.06
+        _EnvironmentDepthBias("Environment Depth Bias", Float) = 0.2
         _PlanarUV("Planar UV (object ZY)", Float) = 0
         _PlanarScale("Planar V scale along width, 1/m", Float) = 0.33
         _PlanarScaleY("Planar U scale along height, 1/m", Float) = 1.25
@@ -137,7 +137,7 @@ Shader "VorotaKraft/GateLitOccluded"
                 // волокна дерева — вдоль ширины ворот (ось Z секции)
                 // Текстура дерева: волокна вдоль V; справа в ней чёрное поле (U > _PlanarURange) — берём только левую часть
                 float2 uv0 = _PlanarUV > 0.5
-                    ? float2(input.positionOS.y * _PlanarScaleY, input.positionOS.z * _PlanarScale)
+                    ? float2(input.positionOS.y * _PlanarScaleY, 0.5 + input.positionOS.z * _PlanarScale)
                     : input.uv;
                 o.positionOS = input.positionOS.xyz;
                 o.uv = TRANSFORM_TEX(uv0, _BaseMap);
@@ -175,6 +175,9 @@ Shader "VorotaKraft/GateLitOccluded"
                     const float w = 0.16;                       // ширина гофра — доля шага
                     float slope = t < w ? sin(t / w * 6.2831853) : 0.0;
                     normalWS = normalize(normalWS + upWS * slope * _RibDepth);
+                    // затенение в глубине канавки — гофры читаются и на тёмных цветах
+                    float groove = t < w ? sin(t / w * 3.1415926) : 0.0;
+                    baseCol.rgb *= 1.0 - 0.35 * groove;
                 }
                 if (_Stucco > 0.001)
                 {

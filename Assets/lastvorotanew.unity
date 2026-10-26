@@ -3984,7 +3984,7 @@ MonoBehaviour:
   disableOtherLights: 1
   lightColor: {r: 1, g: 0.97, b: 0.93, a: 1}
   lightIntensity: 1.1
-  lightDirectionInGate: {x: -0.35, y: -0.9, z: 0.25}
+  lightDirectionInGate: {x: -0.6, y: -0.7, z: 0.25}
   lightEuler: {x: 68, y: 35, z: 0}
   shadowStrength: 0.75
   ceiling: {r: 0.78, g: 0.77, b: 0.75, a: 1}

@@ -27,7 +27,7 @@ public class MrLighting : MonoBehaviour
     public Color lightColor = new Color(1f, 0.97f, 0.93f);
     public float lightIntensity = 1.1f;
     [Tooltip("Направление света в осях ворот (+X — в комнату): свет падает из комнаты сверху, как от потолочной лампы")]
-    public Vector3 lightDirectionInGate = new Vector3(-0.35f, -0.9f, 0.25f);
+    public Vector3 lightDirectionInGate = new Vector3(-0.6f, -0.7f, 0.25f);
     [Tooltip("Если ворот нет — направление в мировых осях (градусы)")]
     public Vector3 lightEuler = new Vector3(68f, 35f, 0f);
     [Range(0f, 1f)] public float shadowStrength = 0.75f;
@@ -180,9 +180,19 @@ public class MrLighting : MonoBehaviour
     void ApplyLight()
     {
         if (mainLight == null) return;
-        mainLight.transform.rotation = shadowTarget
-            ? Quaternion.LookRotation(shadowTarget.rotation * lightDirectionInGate.normalized, Vector3.up)
-            : Quaternion.Euler(lightEuler);
+        if (shadowTarget)
+        {
+            // Свет — со стороны зрителя: иначе видимая сторона полотна в тени и гофры не читаются
+            var d = lightDirectionInGate;
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                float side = shadowTarget.InverseTransformPoint(cam.transform.position).x;
+                d.x = -Mathf.Sign(side == 0f ? 1f : side) * Mathf.Abs(d.x);
+            }
+            mainLight.transform.rotation = Quaternion.LookRotation(shadowTarget.rotation * d.normalized, Vector3.up);
+        }
+        else mainLight.transform.rotation = Quaternion.Euler(lightEuler);
         Color tint = Color.Lerp(Color.white, Tint, tintAmount);
         mainLight.color = lightColor * tint;
         mainLight.intensity = lightIntensity * Brightness;

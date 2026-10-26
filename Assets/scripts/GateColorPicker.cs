@@ -215,10 +215,10 @@ public class GateColorPicker : MonoBehaviour
         {
             // Дерево: текстура плоско вдоль ширины, ~2 м на повтор; волокна — по ширине
             var tex = m.GetTexture("_BaseMap");
-            if (tex != null) tex.wrapMode = TextureWrapMode.Repeat;
+            if (tex != null) { tex.wrapModeU = TextureWrapMode.Repeat; tex.wrapModeV = TextureWrapMode.Mirror; }
             m.SetFloat("_PlanarUV", 1f);
-            m.SetFloat("_PlanarScale", 0.33f);   // ~3 м текстуры по ширине
-            m.SetFloat("_PlanarScaleY", 1.25f);  // ~0,8 м по высоте
+            m.SetFloat("_PlanarScale", 0.2f);         // длина текстуры = 5 м по ширине: на воротах без стыка
+            m.SetFloat("_PlanarScaleY", 1f / 0.84f);  // повтор по высоте 0,84 м = 6 гофров — стык прячется в канавке
             m.SetFloat("_PlanarURange", 0.84f);
             m.SetFloat("_Stucco", 0.06f);
             m.SetFloat("_RoughnessMin", 0.55f);
