@@ -52,6 +52,8 @@ public class MrLighting : MonoBehaviour
     public bool depthOcclusion = true;
     [Tooltip("Руки тоже перекрывают ворота")]
     public bool handsOcclude = true;
+    [Tooltip("Мягкие края перекрытия — красивее, но заметно дороже для GPU очков")]
+    public bool softOcclusion = false;
 
     [Header("Подстройка по камере очков")]
     public bool cameraAdaptation = true;
@@ -177,22 +179,30 @@ public class MrLighting : MonoBehaviour
         _probe.intensity = reflectionIntensity;
     }
 
+    float _appliedBrightness = -1f;
+    Color _appliedTint = Color.clear;
+    Quaternion _appliedRotation = Quaternion.identity;
+
+    Quaternion CurrentLightRotation()
+    {
+        if (!shadowTarget) return Quaternion.Euler(lightEuler);
+        var d = lightDirectionInGate;
+        var cam = Camera.main;
+        if (cam != null)
+        {
+            float side = shadowTarget.InverseTransformPoint(cam.transform.position).x;
+            d.x = -Mathf.Sign(side == 0f ? 1f : side) * Mathf.Abs(d.x);
+        }
+        return Quaternion.LookRotation(shadowTarget.rotation * d.normalized, Vector3.up);
+    }
+
     void ApplyLight()
     {
         if (mainLight == null) return;
-        if (shadowTarget)
-        {
-            // Свет — со стороны зрителя: иначе видимая сторона полотна в тени и гофры не читаются
-            var d = lightDirectionInGate;
-            var cam = Camera.main;
-            if (cam != null)
-            {
-                float side = shadowTarget.InverseTransformPoint(cam.transform.position).x;
-                d.x = -Mathf.Sign(side == 0f ? 1f : side) * Mathf.Abs(d.x);
-            }
-            mainLight.transform.rotation = Quaternion.LookRotation(shadowTarget.rotation * d.normalized, Vector3.up);
-        }
-        else mainLight.transform.rotation = Quaternion.Euler(lightEuler);
+        _appliedBrightness = Brightness;
+        _appliedTint = Tint;
+        _appliedRotation = CurrentLightRotation();
+        mainLight.transform.rotation = _appliedRotation; // свет — со стороны зрителя, сверху
         Color tint = Color.Lerp(Color.white, Tint, tintAmount);
         mainLight.color = lightColor * tint;
         mainLight.intensity = lightIntensity * Brightness;
@@ -263,7 +273,11 @@ public class MrLighting : MonoBehaviour
             Brightness = Mathf.Lerp(Brightness, _targetBrightness, k);
             Tint = Color.Lerp(Tint, _targetTint, k);
         }
-        ApplyLight();
+        // Перенастраиваем свет и окружение только при заметных изменениях (обновление SH/отражений не бесплатно)
+        Quaternion camSide = CurrentLightRotation();
+        if (Mathf.Abs(Brightness - _appliedBrightness) > 0.01f || Mathf.Abs(Tint.r - _appliedTint.r) + Mathf.Abs(Tint.g - _appliedTint.g) + Mathf.Abs(Tint.b - _appliedTint.b) > 0.02f
+            || Quaternion.Angle(camSide, _appliedRotation) > 1f)
+            ApplyLight();
     }
 
     // ---------- Depth API ----------
@@ -283,7 +297,7 @@ public class MrLighting : MonoBehaviour
         }
         var dm = FindFirstObjectByType<EnvironmentDepthManager>();
         if (dm == null) dm = gameObject.AddComponent<EnvironmentDepthManager>();
-        dm.OcclusionShadersMode = OcclusionShadersMode.SoftOcclusion;
+        dm.OcclusionShadersMode = softOcclusion ? OcclusionShadersMode.SoftOcclusion : OcclusionShadersMode.HardOcclusion;
         dm.RemoveHands = !handsOcclude;
         if (debugLogs) Debug.Log("MrLighting: Depth API включён (мягкое перекрытие)");
     }

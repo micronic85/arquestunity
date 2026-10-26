@@ -3999,12 +3999,13 @@ MonoBehaviour:
   floorShadowSize: 9
   depthOcclusion: 1
   handsOcclude: 1
+  softOcclusion: 0
   cameraAdaptation: 1
   referenceLuminance: 0.38
   brightnessRange: {x: 0.45, y: 1.4}
   tintAmount: 0.5
   adaptSpeed: 1.5
-  debugLogs: 1
+  debugLogs: 0
 --- !u!4 &574182035
 Transform:
   m_ObjectHideFlags: 0
@@ -27952,7 +27953,7 @@ MonoBehaviour:
   animationClipName: Animation
   openHandTravelY: 2.3
   maxProgress: 0.98
-  debugLogs: 1
+  debugLogs: 0
 --- !u!114 &7685820126626308159
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -28070,7 +28071,7 @@ MonoBehaviour:
   measure: {fileID: 0}
   pokeDepth: 0.015
   pokeCooldown: 0.4
-  debugLogs: 1
+  debugLogs: 0
   debugApply: -1
 --- !u!114 &7685820126626308161
 MonoBehaviour:
