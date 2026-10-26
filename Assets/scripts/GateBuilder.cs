@@ -83,6 +83,8 @@ public class GateBuilder : MonoBehaviour
     const float D0 = 3.9f;       // глубина горизонтальных направляющих
 
     public event Action Built;
+    /// <summary>Корень текущих собранных ворот (старый при пересборке ещё живёт до конца кадра — искать по имени нельзя).</summary>
+    public Transform Root => _root;
 
     public float CurtainWidth { get; private set; }
     public float CurtainHeight { get; private set; }

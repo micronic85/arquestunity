@@ -87,6 +87,8 @@ public class GateColorPicker : MonoBehaviour
 
     [Header("Debug")]
     public bool debugLogs = false;
+    [Tooltip("Проверка в редакторе: индекс цвета палитры (применяется один раз)")]
+    public int debugApply = -1;
 
     class HandRef
     {
@@ -100,7 +102,7 @@ public class GateColorPicker : MonoBehaviour
     readonly HandRef _left = new HandRef();
     readonly HandRef _right = new HandRef();
 
-    class Entry { public string label; public Material gate; public Material tile; }
+    class Entry { public string label; public Material gate; public Material tile; public Color color; public bool textured; public Material adaptive; }
     readonly List<Entry> _palette = new List<Entry>();
     readonly List<(Renderer r, int slot)> _targets = new List<(Renderer, int)>();
 
@@ -127,6 +129,7 @@ public class GateColorPicker : MonoBehaviour
     {
         if (builder == null) builder = GetComponent<GateBuilder>();
         CollectMaterials();
+        RefreshTargets();
         if (builder != null) builder.Built += RefreshTargets;
         if (openings == null) openings = FindFirstObjectByType<OpeningDetector>();
         if (measure == null) measure = FindFirstObjectByType<DistoMeasure>();
@@ -166,6 +169,8 @@ public class GateColorPicker : MonoBehaviour
                 label = sw.label.Replace("\\n", "\n"),
                 gate = gateMat,
                 tile = sw.tileUsesTexture ? gateMat : TileMaterial(sw.tileColor),
+                color = sw.tileColor,
+                textured = sw.tileUsesTexture,
             });
         }
         if (debugLogs) Debug.Log($"GateColorPicker: palette={_palette.Count} targets={_targets.Count} base={baseMat.shader.name}");
@@ -175,15 +180,47 @@ public class GateColorPicker : MonoBehaviour
     public void RefreshTargets()
     {
         _targets.Clear();
-        foreach (var r in GetComponentsInChildren<Renderer>(true))
+        // Адаптивные ворота: наружная обшивка секций — детали «панель_N» (сторона улицы).
+        // Прежняя модель (материал «базовый цвет») скрыта — её не трогаем.
+        var gate = builder != null ? builder.Root : null;
+        if (gate != null)
         {
-            var mats = r.sharedMaterials;
-            for (int i = 0; i < mats.Length; i++)
-                if (mats[i] != null && CleanName(mats[i].name) == targetMaterialName) _targets.Add((r, i));
+            foreach (var r in gate.GetComponentsInChildren<Renderer>(true))
+                if (IsOuterSkin(r.transform, gate))
+                    for (int i = 0; i < r.sharedMaterials.Length; i++) _targets.Add((r, i));
         }
+        if (_targets.Count == 0)
+            foreach (var r in GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = r.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
+                    if (mats[i] != null && CleanName(mats[i].name) == targetMaterialName) _targets.Add((r, i));
+            }
         if (_selected >= 0) Apply(_selected);
         if (debugLogs) Debug.Log($"GateColorPicker: targets refreshed = {_targets.Count}");
     }
+
+    // Панели адаптивных ворот без UV-развёртки: однотонный RAL — точный цвет плитки,
+    // дерево — та же текстура, положенная плоско по ширине/высоте секции
+    Material AdaptiveMaterial(Entry e)
+    {
+        if (e.adaptive != null) return e.adaptive;
+        var baseMat = GateMaterials.Get(e.gate);
+        if (baseMat == null || !baseMat.HasProperty("_PlanarUV")) return null;
+        var m = new Material(baseMat) { name = baseMat.name + " (adaptive)" };
+        if (e.textured) { m.SetFloat("_PlanarUV", 1f); m.SetFloat("_PlanarScale", 0.6f); }
+        else { m.SetTexture("_BaseMap", null); m.SetColor("_BaseColor", e.color); }
+        e.adaptive = m;
+        return m;
+    }
+
+    static bool IsOuterSkin(Transform t, Transform stop)
+    {
+        for (; t != null && t != stop; t = t.parent)
+            if (t.name.StartsWith("панель_")) return true;
+        return false;
+    }
+
 
     // Вписать ворота: место — проём из разметки (на который смотрим), размер — замер DISTO, а если его нет — разметка
     void FitToOpening()
@@ -222,6 +259,8 @@ public class GateColorPicker : MonoBehaviour
         return m;
     }
 
+    static string Path(Transform t) { var p = t.name; while (t.parent != null) { t = t.parent; p = t.name + "/" + p; } return p; }
+
     // Unity может добавить " (Instance)" к имени материала
     static string CleanName(string n) => n.Replace(" (Instance)", "").Trim();
 
@@ -229,15 +268,16 @@ public class GateColorPicker : MonoBehaviour
     {
         if (index < 0 || index >= _palette.Count) return;
         var mat = GateMaterials.Get(_palette[index].gate);
+        var adaptiveMat = AdaptiveMaterial(_palette[index]);
         foreach (var (r, slot) in _targets)
         {
             var mats = r.sharedMaterials;
-            mats[slot] = mat;
+            mats[slot] = adaptiveMat != null && IsOuterSkin(r.transform, transform) ? adaptiveMat : mat;
             r.sharedMaterials = mats;
         }
         _selected = index;
         UpdateHighlight();
-        if (debugLogs) Debug.Log($"GateColorPicker: applied {_palette[index].label}");
+        if (debugLogs) Debug.Log($"GateColorPicker: applied {_palette[index].label} mat={mat.name} shader={mat.shader.name} targets={_targets.Count}");
     }
 
     // ---------- menu ----------
@@ -431,6 +471,7 @@ public class GateColorPicker : MonoBehaviour
 
     void Update()
     {
+        if (debugApply >= 0) { Apply(debugApply); debugApply = -1; }
         if (_menu == null || _palette.Count == 0) return;
         if (!EnsureRefs()) { if (_menuVisible) SetMenuVisible(false); return; }
 

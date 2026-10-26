@@ -21,6 +21,8 @@ Shader "VorotaKraft/GateLitOccluded"
         _Cutoff("Alpha Cutoff", Range(0, 1)) = 0.5
         [Enum(Off, 0, On, 1)] _ZWrite("ZWrite", Float) = 1
         _EnvironmentDepthBias("Environment Depth Bias", Float) = 0.06
+        _PlanarUV("Planar UV (object ZY)", Float) = 0
+        _PlanarScale("Planar UV scale, 1/m", Float) = 1
     }
 
     HLSLINCLUDE
@@ -45,6 +47,8 @@ Shader "VorotaKraft/GateLitOccluded"
         half _AlphaClip;
         half _Cutoff;
         float _EnvironmentDepthBias;
+        float _PlanarUV;
+        float _PlanarScale;
     CBUFFER_END
     ENDHLSL
 
@@ -115,7 +119,9 @@ Shader "VorotaKraft/GateLitOccluded"
                 o.positionWS = p.positionWS;
                 o.normalWS = n.normalWS;
                 o.tangentWS = float4(n.tangentWS, input.tangentOS.w * GetOddNegativeScale());
-                o.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+                // У панелей адаптивных ворот нет развёртки — текстуру (дерево) кладём плоско по ширине/высоте
+                float2 uv0 = _PlanarUV > 0.5 ? input.positionOS.zy * _PlanarScale : input.uv;
+                o.uv = TRANSFORM_TEX(uv0, _BaseMap);
                 o.fogFactor = ComputeFogFactor(p.positionCS.z);
                 META_DEPTH_INITIALIZE_VERTEX_OUTPUT(o, input.positionOS);
                 return o;
