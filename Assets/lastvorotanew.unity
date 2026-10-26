@@ -28020,6 +28020,10 @@ MonoBehaviour:
   openingHeight: 2.743
   widthOverlap: 0.1
   heightOverlap: 0.05
+  windowsEnabled: 1
+  wicketEnabled: 1
+  wicketMinOpeningHeight: 2
+  wicketMinOpeningWidth: 2
   minSection: 0.45
   maxSection: 0.6
   sectionStep: 0.025

@@ -115,7 +115,7 @@ public class GateColorPicker : MonoBehaviour
     readonly List<Button> _buttons = new List<Button>();
 
     // Блок замера
-    TextMeshPro _widthText, _heightText, _statusText, _openText, _fitText;
+    TextMeshPro _widthText, _heightText, _statusText, _openText, _fitText, _windowsText, _wicketText;
     Transform _widthBtn, _heightBtn, _fieldHighlight;
 
     bool _menuVisible;
@@ -288,7 +288,16 @@ public class GateColorPicker : MonoBehaviour
         {
             y -= 0.006f;
             PanelButton("OpenBtn", new Vector3(0, y - 0.011f, 0), width, 0.022f, out _openText, () => builder.ToggleOpen());
-            y -= 0.022f;
+            y -= 0.022f + tileGap;
+
+            // Комплектация: окна и калитка (калитка — только если проём позволяет)
+            float half = (width - tileGap) * 0.5f, optH = 0.02f;
+            float xl = -width * 0.5f + half * 0.5f, xr = width * 0.5f - half * 0.5f;
+            PanelButton("WindowsBtn", new Vector3(xl, y - optH * 0.5f, 0), half, optH, out _windowsText,
+                () => builder.SetOptions(!builder.windowsEnabled, builder.wicketEnabled));
+            PanelButton("WicketBtn", new Vector3(xr, y - optH * 0.5f, 0), half, optH, out _wicketText,
+                () => { if (builder.WicketAllowed) builder.SetOptions(builder.windowsEnabled, !builder.wicketEnabled); });
+            y -= optH;
         }
 
         if (measure != null) y = BuildMeasure(y, width);
@@ -444,6 +453,14 @@ public class GateColorPicker : MonoBehaviour
         }
         if (_openText != null && builder != null)
             _openText.text = builder.OpenOrOpening ? "Закрыть ворота" : "Открыть ворота";
+        if (_windowsText != null && builder != null)
+            _windowsText.text = builder.windowsEnabled ? "Окна: есть" : "Окна: нет";
+        if (_wicketText != null && builder != null)
+        {
+            _wicketText.text = !builder.WicketAllowed ? $"Калитка: от {builder.wicketMinOpeningWidth * 1000:0}×{builder.wicketMinOpeningHeight * 1000:0}"
+                : builder.wicketEnabled ? "Калитка: есть" : "Калитка: нет";
+            _wicketText.color = builder.WicketAllowed ? Color.white : new Color(0.6f, 0.6f, 0.65f);
+        }
 
         // Меню над ладонью, развёрнуто к голове, без крена
         Vector3 pos = palm + normal * palmOffset;

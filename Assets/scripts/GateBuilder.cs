@@ -29,6 +29,27 @@ public class GateBuilder : MonoBehaviour
     [Tooltip("Полотно выше проёма на, м (нахлёст на перемычку)")]
     public float heightOverlap = 0.05f;
 
+    [Header("Комплектация")]
+    public bool windowsEnabled = true;
+    public bool wicketEnabled = true;
+    [Tooltip("Калитка возможна только в проёме не ниже этого, м")]
+    public float wicketMinOpeningHeight = 2.0f;
+    [Tooltip("Калитка возможна только в проёме не уже этого, м")]
+    public float wicketMinOpeningWidth = 2.0f;
+
+    /// <summary>Проём позволяет калитку.</summary>
+    public bool WicketAllowed => openingHeight >= wicketMinOpeningHeight - 1e-4f && openingWidth >= wicketMinOpeningWidth - 1e-4f;
+    /// <summary>Калитка сейчас есть в воротах.</summary>
+    public bool HasWicket => wicketEnabled && WicketAllowed;
+
+    /// <summary>Включить/выключить окна и калитку и пересобрать ворота (размер, цвет и положение сохраняются).</summary>
+    public void SetOptions(bool windows, bool wicket)
+    {
+        windowsEnabled = windows;
+        wicketEnabled = wicket;
+        Rebuild();
+    }
+
     [Header("Секции, м")]
     public float minSection = 0.45f;
     public float maxSection = 0.60f;
@@ -362,36 +383,73 @@ public class GateBuilder : MonoBehaviour
             parts.Add(c);
             if (LocalBounds(section, c, out var bb)) bounds[c] = bb;
         }
-        if (debugLogs)
-            foreach (var kv in bounds)
-                if (kv.Key.name.StartsWith("резинка") || kv.Key.name.StartsWith("панель") || kv.Key.name.StartsWith("загиб") || kv.Key.name.StartsWith("Plane.0"))
-                    Debug.Log($"[GateBuilder] {section.name}/{kv.Key.name} min={kv.Value.min.ToString("F3")} max={kv.Value.max.ToString("F3")} active={kv.Key.gameObject.activeSelf} mat={kv.Key.GetComponentInChildren<Renderer>()?.sharedMaterial?.name}");
 
-        // Калитка: её положение по ширине (детали «калитка*»)
+        var windowShift = new Dictionary<Transform, float>();
+        var hidden = new HashSet<Transform>();
+
+        // Калитка: детали «калитка*» уже половины полотна (широкая «калитка.004» — нижний профиль полотна, он есть всегда)
+        // и ручка калитки. Без калитки они скрываются — под ними сплошная панель.
+        bool wicketOn = HasWicket;
         Bounds? wicket = null;
         foreach (var kv in bounds)
-            if (kv.Key.name.StartsWith("калитка") && kv.Value.size.z < 0.5f * W0)
-            { if (wicket == null) wicket = kv.Value; else { var w = wicket.Value; w.Encapsulate(kv.Value); wicket = w; } }
+        {
+            bool wicketPart = (kv.Key.name.StartsWith("калитка") && kv.Value.size.z < 0.5f * W0) || kv.Key.name == "WicketHandle";
+            if (!wicketPart) continue;
+            if (!wicketOn) { hidden.Add(kv.Key); continue; }
+            if (kv.Key.name == "WicketHandle") continue;
+            if (wicket == null) wicket = kv.Value; else { var w = wicket.Value; w.Encapsulate(kv.Value); wicket = w; }
+        }
         float wkC = wicket?.center.z ?? 0f, wkHalf = wicket?.extents.z ?? 0f;
         float wkShift = wkC * (kW - 1f);
 
-        // Окна: детали шириной 0,5–0,8 м и высотой > 0,2 м, сгруппированные по положению.
-        // Окно внутри калитки едет с калиткой; боковые — посередине между калиткой и краем полотна,
-        // а если места мало — скрываются.
-        var windowShift = new Dictionary<Transform, float>();
-        var hidden = new HashSet<Transform>();
+        // Окна: детали шириной 0,5–0,8 м и высотой > 0,2 м (рамка, стекло, резинка), сгруппированные по центру.
+        var windowParts = new List<Transform>();
         foreach (var kv in bounds)
         {
             var b0 = kv.Value;
             if (b0.size.z < 0.5f || b0.size.z > 0.8f || b0.size.y < 0.2f || kv.Key.name.StartsWith("калитка")) continue;
-            float zc = b0.center.z, winW = b0.size.z;
-            if (wicket != null && Mathf.Abs(zc - wkC) < wkHalf) { windowShift[kv.Key] = wkShift; continue; }
-            float side = Mathf.Sign(zc - wkC);
-            float inner = wkC + wkShift + side * wkHalf;
-            float outer = side * (CurtainWidth * 0.5f - 0.08f);
-            float space = Mathf.Abs(outer - inner);
-            if (space < winW + 0.15f) { hidden.Add(kv.Key); continue; }
-            windowShift[kv.Key] = (inner + outer) * 0.5f - zc;
+            windowParts.Add(kv.Key);
+        }
+        if (!windowsEnabled)
+            foreach (var wp in windowParts) hidden.Add(wp);
+        else if (wicket != null)
+        {
+            // С калиткой: окно в калитке едет с ней; боковые — посередине между калиткой и краем, если мало места — скрываются
+            foreach (var wp in windowParts)
+            {
+                var b0 = bounds[wp];
+                float zc = b0.center.z, winW = b0.size.z;
+                if (Mathf.Abs(zc - wkC) < wkHalf) { windowShift[wp] = wkShift; continue; }
+                float side = Mathf.Sign(zc - wkC);
+                float inner = wkC + wkShift + side * wkHalf;
+                float outer = side * (CurtainWidth * 0.5f - 0.08f);
+                if (Mathf.Abs(outer - inner) < winW + 0.15f) { hidden.Add(wp); continue; }
+                windowShift[wp] = (inner + outer) * 0.5f - zc;
+            }
+        }
+        else if (windowParts.Count > 0)
+        {
+            // Без калитки: окна равномерно по ширине, сколько помещается (ближние к центру — в приоритете)
+            var groups = new List<(float z, float w, List<Transform> parts)>();
+            foreach (var wp in windowParts)
+            {
+                var b0 = bounds[wp];
+                int gi = groups.FindIndex(g => Mathf.Abs(g.z - b0.center.z) < 0.08f);
+                if (gi < 0) groups.Add((b0.center.z, b0.size.z, new List<Transform> { wp }));
+                else { var g = groups[gi]; g.parts.Add(wp); groups[gi] = (g.z, Mathf.Max(g.w, b0.size.z), g.parts); }
+            }
+            float winW = 0f; foreach (var g in groups) winW = Mathf.Max(winW, g.w);
+            int n = Mathf.Min(groups.Count, Mathf.FloorToInt((CurtainWidth - 0.16f) / (winW + 0.15f)));
+            groups.Sort((a, c) => Mathf.Abs(a.z).CompareTo(Mathf.Abs(c.z)));
+            var used = groups.GetRange(0, Mathf.Max(0, n));
+            used.Sort((a, c) => a.z.CompareTo(c.z));
+            for (int gi = 0; gi < groups.Count; gi++)
+                if (gi >= n) foreach (var wp in groups[gi].parts) hidden.Add(wp);
+            for (int k = 0; k < used.Count; k++)
+            {
+                float target = -CurtainWidth * 0.5f + (k + 0.5f) * CurtainWidth / n;
+                foreach (var wp in used[k].parts) windowShift[wp] = target - used[k].z;
+            }
         }
 
         foreach (var p in parts)
