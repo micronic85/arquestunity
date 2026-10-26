@@ -3949,6 +3949,77 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1238294087}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &574182033
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 574182035}
+  - component: {fileID: 574182034}
+  m_Layer: 0
+  m_Name: MrLighting
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &574182034
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 574182033}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 056b901d8436024489b6c3dbcb36db52, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MrLighting
+  gateShader: {fileID: 4800000, guid: c6368c3f03de53546b5c06b78d4cf0da, type: 3}
+  shadowCatcherShader: {fileID: 4800000, guid: 8513147f36371ac489664c541f27b016, type: 3}
+  mainLight: {fileID: 0}
+  disableOtherLights: 1
+  lightColor: {r: 1, g: 0.97, b: 0.93, a: 1}
+  lightIntensity: 1.1
+  lightDirectionInGate: {x: -0.35, y: -0.9, z: 0.25}
+  lightEuler: {x: 68, y: 35, z: 0}
+  shadowStrength: 0.75
+  ceiling: {r: 0.78, g: 0.77, b: 0.75, a: 1}
+  walls: {r: 0.5, g: 0.5, b: 0.49, a: 1}
+  floor: {r: 0.22, g: 0.21, b: 0.2, a: 1}
+  ambientIntensity: 1
+  reflectionIntensity: 0.7
+  roughnessMin: 0.3
+  floorShadow: 1
+  shadowTarget: {fileID: 0}
+  floorShadowStrength: 0.55
+  floorShadowSize: 9
+  depthOcclusion: 1
+  handsOcclude: 1
+  cameraAdaptation: 1
+  referenceLuminance: 0.38
+  brightnessRange: {x: 0.45, y: 1.4}
+  tintAmount: 0.5
+  adaptSpeed: 1.5
+  debugLogs: 0
+--- !u!4 &574182035
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 574182033}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &578837562
 GameObject:
   m_ObjectHideFlags: 0
@@ -31173,3 +31244,4 @@ SceneRoots:
   - {fileID: 769339909}
   - {fileID: 618121853}
   - {fileID: 1127907207}
+  - {fileID: 574182035}

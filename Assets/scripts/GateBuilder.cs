@@ -156,7 +156,7 @@ public class GateBuilder : MonoBehaviour
         cam.fieldOfView = 40f;
         Vector3 c = _root.TransformPoint(new Vector3(1.2f, CurtainHeight * 0.6f, 0));
         float dist = Mathf.Max(CurtainWidth, CurtainHeight + 2f) * 1.9f;
-        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero), ("botL", Vector3.zero), ("botR", Vector3.zero), ("user", Vector3.zero), ("seals", Vector3.zero) };
+        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero), ("botL", Vector3.zero), ("botR", Vector3.zero), ("user", Vector3.zero), ("seals", Vector3.zero), ("floor", Vector3.zero) };
         var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
         foreach (var (name, dir) in views)
         {
@@ -176,6 +176,13 @@ public class GateBuilder : MonoBehaviour
                 cam.orthographic = true; cam.orthographicSize = 0.15f;
                 cam.transform.position = _root.TransformPoint(new Vector3(xh, 0.5f, zt));
                 cam.transform.LookAt(_root.TransformPoint(new Vector3(xh, 5f, zt)), _root.TransformDirection(Vector3.right));
+            }
+            else if (name == "floor")
+            {
+                // из гаража на пол у ворот: тень от полотна и направляющих
+                cam.orthographic = false; cam.fieldOfView = 60f;
+                cam.transform.position = _root.TransformPoint(new Vector3(3.2f, 2.2f, -CurtainWidth * 0.6f));
+                cam.transform.LookAt(_root.TransformPoint(new Vector3(0.8f, 0f, 0f)), Vector3.up);
             }
             else if (name == "seals")
             {
@@ -330,6 +337,7 @@ public class GateBuilder : MonoBehaviour
         BuildTrack(-1);
         BuildSeals();
         AttachHandle();
+        GateMaterials.ConvertRenderers(_root); // перекрытие реальными предметами + без «пластикового» блеска (MrLighting)
         ApplyPose();
 
         if (debugLogs)

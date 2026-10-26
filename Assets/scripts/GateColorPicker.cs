@@ -228,7 +228,7 @@ public class GateColorPicker : MonoBehaviour
     public void Apply(int index)
     {
         if (index < 0 || index >= _palette.Count) return;
-        var mat = _palette[index].gate;
+        var mat = GateMaterials.Get(_palette[index].gate);
         foreach (var (r, slot) in _targets)
         {
             var mats = r.sharedMaterials;

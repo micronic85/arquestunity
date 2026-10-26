@@ -42,6 +42,16 @@
   Комплектация: windowsEnabled / wicketEnabled (SetOptions, кнопки «Окна» и «Калитка» в меню на ладони).
   Калитка только при проёме ≥ wicketMinOpeningWidth × wicketMinOpeningHeight (2,0 × 2,0 м); без калитки окна
   ставятся равномерно, сколько помещается.
+- `MrLighting.cs` (объект MrLighting) — освещение для MR: ровный «комнатный» ambient (Trilight + SH) и своя кубкарта
+  отражений вместо неба Unity; собственный направленный свет MrMainLight (из комнаты сверху, по осям ворот; точечный
+  «Directional Light» сцены выключается); тень ворот на пол — FloorShadowCatcher (`Assets/Shaders/ShadowCatcher.shader`,
+  высота пола из MRUK); Depth API — EnvironmentDepthManager, мягкое перекрытие, руки тоже перекрывают;
+  подстройка яркости/оттенка по камере очков (PassthroughCameraAccess, разрешение horizonos.permission.HEADSET_CAMERA,
+  только Quest 3/3S, Horizon OS ≥ 74).
+- `GateMaterials.cs` + `Assets/Shaders/GateLitOccluded.shader` — материалы glTFast ворот конвертируются в PBR-шейдер
+  с перекрытием Depth API (GateBuilder.Rebuild и GateColorPicker.Apply); нижняя граница шероховатости 0,3,
+  резина — неметалл. Depth API требует пакет com.unity.xr.meta-openxr (2.4.1) и OpenXR-фичи Meta Quest Session +
+  Occlusion (меню Tools → VorotaKraft → Setup Depth API).
 - `OpeningDetector.cs` (объект OpeningDetector) + префаб MRUK (DataSource = Device) — проёмы из разметки пространства
   Quest (DOOR_FRAME, WINDOW_FRAME): голубая рамка с размером, проём под взглядом — белый и пульсирует. Кнопка
   «Вписать в проём» ставит ворота в выбранный проём (GateBuilder.PlaceInOpening: низ — на пол, +X — в комнату),
