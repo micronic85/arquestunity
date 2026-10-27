@@ -186,7 +186,7 @@ public class GateBuilder : MonoBehaviour
         cam.fieldOfView = 40f;
         Vector3 c = _root.TransformPoint(new Vector3(1.2f, CurtainHeight * 0.6f, 0));
         float dist = Mathf.Max(CurtainWidth, CurtainHeight + 2f) * 1.9f;
-        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero), ("botL", Vector3.zero), ("botR", Vector3.zero), ("user", Vector3.zero), ("seals", Vector3.zero), ("floor", Vector3.zero) };
+        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero), ("botL", Vector3.zero), ("botR", Vector3.zero), ("user", Vector3.zero), ("seals", Vector3.zero), ("floor", Vector3.zero), ("menu", Vector3.zero) };
         var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
         foreach (var (name, dir) in views)
         {
@@ -206,6 +206,15 @@ public class GateBuilder : MonoBehaviour
                 cam.orthographic = true; cam.orthographicSize = 0.15f;
                 cam.transform.position = _root.TransformPoint(new Vector3(xh, 0.5f, zt));
                 cam.transform.LookAt(_root.TransformPoint(new Vector3(xh, 5f, zt)), _root.TransformDirection(Vector3.right));
+            }
+            else if (name == "menu")
+            {
+                // меню на ладони (если открыто): камера в 35 см перед ним
+                var menu = GameObject.Find("GateColorMenu");
+                if (menu == null) continue;
+                cam.orthographic = false; cam.fieldOfView = 50f;
+                cam.transform.position = menu.transform.position - menu.transform.forward * 0.35f;
+                cam.transform.rotation = menu.transform.rotation;
             }
             else if (name == "floor")
             {
@@ -273,6 +282,18 @@ public class GateBuilder : MonoBehaviour
         transform.localScale = Vector3.one; // примерка 1:1
         transform.rotation = Quaternion.LookRotation(Vector3.Cross(inward, Vector3.up), Vector3.up);
         transform.position = bottomCenter - transform.TransformVector(modelOffset);
+    }
+
+    /// <summary>Развернуть ворота на 180° в том же проёме: направляющие уходят в другую сторону
+    /// (если разметку/замер делали снаружи).</summary>
+    public void FlipSide()
+    {
+        StopAnimation();
+        Vector3 bottom = transform.position + transform.TransformVector(modelOffset);
+        float s = transform.localScale.x;
+        PlaceInOpening(bottom, -transform.right);
+        transform.localScale = Vector3.one * s;
+        transform.position = bottom - transform.TransformVector(modelOffset);
     }
 
     /// <summary>Собрать ворота под проём (м).</summary>

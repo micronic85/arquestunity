@@ -91,6 +91,8 @@ public class GateColorPicker : MonoBehaviour
     public bool debugLogs = false;
     [Tooltip("Проверка в редакторе: индекс цвета палитры (применяется один раз)")]
     public int debugApply = -1;
+    [Tooltip("Проверка в редакторе: раскрыть/свернуть палитру")]
+    public bool debugTogglePalette;
 
     class HandRef
     {
@@ -111,6 +113,9 @@ public class GateColorPicker : MonoBehaviour
     Transform _head;
     Transform _menu;
     readonly List<Transform> _tiles = new List<Transform>();
+    bool _paletteOpen;   // палитра раскрыта (иначе — одна строка с текущим цветом)
+    TextMeshPro _headText;
+    Renderer _swatch;
     Transform _highlight;
     int _selected = -1;
 
@@ -201,7 +206,7 @@ public class GateColorPicker : MonoBehaviour
                     if (mats[i] != null && CleanName(mats[i].name) == targetMaterialName) _targets.Add((r, i));
             }
         // До выбора цвета — белые панели (RAL 9003) с гофрами, а не серый материал модели
-        if (_selected < 0 && gate != null && _palette.Count > 0) _selected = 0;
+        if (_selected < 0 && _palette.Count > 0) _selected = 0;
         if (_selected >= 0) Apply(_selected);
         if (debugLogs) Debug.Log($"GateColorPicker: targets refreshed = {_targets.Count}");
     }
@@ -311,6 +316,7 @@ public class GateColorPicker : MonoBehaviour
         }
         _selected = index;
         UpdateHighlight();
+        UpdateHeader();
         if (debugLogs) Debug.Log($"GateColorPicker: applied {_palette[index].label} mat={mat.name} shader={mat.shader.name} targets={_targets.Count}");
     }
 
@@ -328,45 +334,68 @@ public class GateColorPicker : MonoBehaviour
 
         // Раскладка сверху вниз от y = 0, в конце всё центрируется
         float y = 0f;
-        Text("Title", _menu, "Цвет полотна", width, 0.015f).localPosition = new Vector3(0, y - 0.0075f, 0);
-        y -= 0.02f;
+
+        // Строка выбора цвета: образец текущего цвета + название; нажатие раскрывает/сворачивает палитру
+        float headH = 0.026f;
+        PanelButton("ColorHeader", new Vector3(0, y - headH * 0.5f, 0), width, headH, out _headText,
+            () => { _paletteOpen = !_paletteOpen; RebuildMenu(); });
+        var sw = GameObject.CreatePrimitive(PrimitiveType.Quad).transform;
+        Destroy(sw.GetComponent<Collider>());
+        sw.name = "CurrentSwatch";
+        sw.SetParent(_menu, false);
+        sw.localPosition = new Vector3(-width * 0.5f + headH * 0.5f + 0.003f, y - headH * 0.5f, -0.0015f);
+        sw.localScale = new Vector3(headH * 0.75f, headH * 0.75f, 1f);
+        _swatch = sw.GetComponent<Renderer>();
+        // текст правее образца, чтобы не наезжал на него
+        var hr = _headText.rectTransform;
+        hr.sizeDelta = new Vector2(width - headH * 2.2f, hr.sizeDelta.y);
+        hr.localPosition += new Vector3(headH * 0.5f, 0, 0);
+        UpdateHeader();
+        y -= headH + tileGap;
 
         _highlight = Quad("Highlight", _menu, highlightMaterial, Color.white);
         _highlight.localScale = new Vector3(tileSize + 0.006f, tileSize + 0.006f, 1f);
         _highlight.gameObject.SetActive(false);
 
-        for (int i = 0; i < _palette.Count; i++)
+        if (_paletteOpen)
         {
-            int c = i % columns, row = i / columns;
-            float x = -width * 0.5f + tileSize * 0.5f + c * step;
-            float ty = y - tileSize * 0.5f - row * rowStep;
+            for (int i = 0; i < _palette.Count; i++)
+            {
+                int c = i % columns, row = i / columns;
+                float x = -width * 0.5f + tileSize * 0.5f + c * step;
+                float ty = y - tileSize * 0.5f - row * rowStep;
 
-            var tile = GameObject.CreatePrimitive(PrimitiveType.Quad).transform;
-            Destroy(tile.GetComponent<Collider>());
-            tile.name = "Tile_" + i;
-            tile.SetParent(_menu, false);
-            tile.localPosition = new Vector3(x, ty, 0);
-            tile.localScale = new Vector3(tileSize, tileSize, 1f);
-            if (_palette[i].tile != null) tile.GetComponent<Renderer>().sharedMaterial = _palette[i].tile;
-            _tiles.Add(tile);
-            int index = i;
-            AddButton(tile, tileSize, tileSize, () => Apply(index));
+                var tile = GameObject.CreatePrimitive(PrimitiveType.Quad).transform;
+                Destroy(tile.GetComponent<Collider>());
+                tile.name = "Tile_" + i;
+                tile.SetParent(_menu, false);
+                tile.localPosition = new Vector3(x, ty, 0);
+                tile.localScale = new Vector3(tileSize, tileSize, 1f);
+                if (_palette[i].tile != null) tile.GetComponent<Renderer>().sharedMaterial = _palette[i].tile;
+                _tiles.Add(tile);
+                int index = i;
+                // выбор цвета сворачивает палитру
+                AddButton(tile, tileSize, tileSize, () => { Apply(index); _paletteOpen = false; RebuildMenu(); });
 
-            Text("Label_" + i, _menu, _palette[i].label, step * 0.95f, labelH)
-                .localPosition = new Vector3(x, ty - tileSize * 0.5f - labelH * 0.5f, 0);
+                Text("Label_" + i, _menu, _palette[i].label, step * 0.95f, labelH)
+                    .localPosition = new Vector3(x, ty - tileSize * 0.5f - labelH * 0.5f, 0);
+            }
+            y -= rows * rowStep;
         }
-        y -= rows * rowStep;
 
         // Открыть / закрыть адаптивные ворота
         if (builder != null)
         {
             y -= 0.006f;
-            PanelButton("OpenBtn", new Vector3(0, y - 0.011f, 0), width, 0.022f, out _openText, () => builder.ToggleOpen());
+            float half = (width - tileGap) * 0.5f, optH = 0.02f;
+            float xl = -width * 0.5f + half * 0.5f, xr = width * 0.5f - half * 0.5f;
+            PanelButton("OpenBtn", new Vector3(xl, y - 0.011f, 0), half, 0.022f, out _openText, () => builder.ToggleOpen());
+            // замер/разметку сделали снаружи — направляющие ушли на улицу: развернуть в том же проёме
+            PanelButton("FlipBtn", new Vector3(xr, y - 0.011f, 0), half, 0.022f, out var flipText, () => builder.FlipSide());
+            flipText.text = "Развернуть 180°";
             y -= 0.022f + tileGap;
 
             // Комплектация: окна и калитка (калитка — только если проём позволяет)
-            float half = (width - tileGap) * 0.5f, optH = 0.02f;
-            float xl = -width * 0.5f + half * 0.5f, xr = width * 0.5f - half * 0.5f;
             PanelButton("WindowsBtn", new Vector3(xl, y - optH * 0.5f, 0), half, optH, out _windowsText,
                 () => builder.SetOptions(!builder.windowsEnabled, builder.wicketEnabled));
             PanelButton("WicketBtn", new Vector3(xr, y - optH * 0.5f, 0), half, optH, out _wicketText,
@@ -383,6 +412,39 @@ public class GateColorPicker : MonoBehaviour
         var bg = Quad("Background", _menu, backgroundMaterial, new Color(0.08f, 0.08f, 0.1f, 1f));
         bg.localScale = new Vector3(width + 0.02f, top - bottom + 0.02f, 1f);
         bg.localPosition = new Vector3(0, 0, 0.002f);
+    }
+
+    void UpdateHeader()
+    {
+        bool has = _selected >= 0 && _selected < _palette.Count;
+        if (_headText != null)
+            _headText.text = $"Цвет: {(has ? _palette[_selected].label.Replace("\n", " ") : "—")}   ({(_paletteOpen ? "свернуть" : "выбрать")})";
+        if (_swatch != null)
+        {
+            _swatch.gameObject.SetActive(has && _palette[_selected].tile != null);
+            if (has && _palette[_selected].tile != null) _swatch.sharedMaterial = _palette[_selected].tile;
+        }
+    }
+
+    // Пересобрать меню (раскрыли/свернули палитру): положение и видимость сохраняются
+    void RebuildMenu()
+    {
+        Vector3 pos = _menu != null ? _menu.position : Vector3.zero;
+        Quaternion rot = _menu != null ? _menu.rotation : Quaternion.identity;
+        if (_menu != null) Destroy(_menu.gameObject);
+        _tiles.Clear();
+        _buttons.Clear();
+        _openText = _fitText = _windowsText = _wicketText = _markText = _headText = null;
+        _swatch = null;
+        _widthText = _heightText = _statusText = null;
+        BuildMenu();
+        _menu.SetPositionAndRotation(pos, rot);
+        _menu.gameObject.SetActive(_menuVisible);
+        _pokeArmed = false; // тот же тычок не должен нажать кнопку на новом месте
+        RefreshMeasure();
+        OnMarkerChanged();
+        UpdateHighlight();
+        UpdateButtonTexts();
     }
 
     float BuildMeasure(float y, float width)
@@ -518,6 +580,7 @@ public class GateColorPicker : MonoBehaviour
     void Update()
     {
         if (debugApply >= 0) { Apply(debugApply); debugApply = -1; }
+        if (debugTogglePalette && _menu != null) { debugTogglePalette = false; _paletteOpen = !_paletteOpen; RebuildMenu(); _menu.gameObject.SetActive(true); }
         if (_menu == null || _palette.Count == 0) return;
         if (!EnsureRefs()) { if (_menuVisible) SetMenuVisible(false); return; }
 
@@ -538,6 +601,19 @@ public class GateColorPicker : MonoBehaviour
             var op = openings != null ? openings.Selected : null;
             _fitText.text = op != null ? $"Вписать в проём {op.WidthM * 1000:0}×{op.HeightM * 1000:0}" : "Вписать ворота в проём";
         }
+        UpdateButtonTexts();
+
+        // Меню над ладонью, развёрнуто к голове, без крена
+        Vector3 pos = palm + normal * palmOffset;
+        _menu.position = pos;
+        Vector3 fwd = pos - _head.position; // +Z меню смотрит от пользователя
+        if (fwd.sqrMagnitude > 1e-6f) _menu.rotation = Quaternion.LookRotation(fwd, Vector3.up);
+
+        Poke();
+    }
+
+    void UpdateButtonTexts()
+    {
         if (_openText != null && builder != null)
             _openText.text = builder.OpenOrOpening ? "Закрыть ворота" : "Открыть ворота";
         if (_windowsText != null && builder != null)
@@ -548,14 +624,6 @@ public class GateColorPicker : MonoBehaviour
                 : builder.wicketEnabled ? "Калитка: есть" : "Калитка: нет";
             _wicketText.color = builder.WicketAllowed ? Color.white : new Color(0.6f, 0.6f, 0.65f);
         }
-
-        // Меню над ладонью, развёрнуто к голове, без крена
-        Vector3 pos = palm + normal * palmOffset;
-        _menu.position = pos;
-        Vector3 fwd = pos - _head.position; // +Z меню смотрит от пользователя
-        if (fwd.sqrMagnitude > 1e-6f) _menu.rotation = Quaternion.LookRotation(fwd, Vector3.up);
-
-        Poke();
     }
 
     void Poke()
