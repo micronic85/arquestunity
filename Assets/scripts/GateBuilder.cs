@@ -9,7 +9,7 @@ using UnityEngine;
 ///
 /// Оси (локальные, от точки «пол, центр проёма, плоскость полотна»): Y вверх, Z — ширина, +X — вглубь гаража.
 /// </summary>
-public class GateBuilder : MonoBehaviour
+public partial class GateBuilder : MonoBehaviour
 {
     [Header("Детали")]
     [Tooltip("Assets/Models/gate_parts.glb")]
@@ -148,12 +148,14 @@ public class GateBuilder : MonoBehaviour
             g.InjectOptionalTargetTransform(_grabProxy);
             g.InjectOptionalThrowWhenUnselected(false);
         }
+        OwnRigidbody(handleObject); // свои коллайдеры: ручка калитки (копия) не должна открывать ворота
     }
 
     // Захват рукой (Grabbable) двигает саму ручку — возвращаем её на место на полотне каждый кадр:
     // ворота едут за рукой через GateController, а ручка остаётся прикрученной к нижней секции
     void LateUpdate()
     {
+        KeepWicketGrabs();
         if (!_handleAttached || handleObject == null || _sections.Count == 0) return;
         if (handleObject.parent != _sections[0]) handleObject.SetParent(_sections[0], false);
         handleObject.localPosition = _handleLocalPos;
@@ -172,6 +174,7 @@ public class GateBuilder : MonoBehaviour
             _lastDebugProgress = debugProgress;
             SetProgress(debugProgress);
         }
+        UpdateWicketGrab();
         if (debugSnapshot) { debugSnapshot = false; Snapshot(); }
     }
 
@@ -186,7 +189,7 @@ public class GateBuilder : MonoBehaviour
         cam.fieldOfView = 40f;
         Vector3 c = _root.TransformPoint(new Vector3(1.2f, CurtainHeight * 0.6f, 0));
         float dist = Mathf.Max(CurtainWidth, CurtainHeight + 2f) * 1.9f;
-        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero), ("botL", Vector3.zero), ("botR", Vector3.zero), ("user", Vector3.zero), ("seals", Vector3.zero), ("floor", Vector3.zero), ("menu", Vector3.zero) };
+        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero), ("botL", Vector3.zero), ("botR", Vector3.zero), ("user", Vector3.zero), ("seals", Vector3.zero), ("floor", Vector3.zero), ("menu", Vector3.zero), ("wicket", Vector3.zero) };
         var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
         foreach (var (name, dir) in views)
         {
@@ -206,6 +209,17 @@ public class GateBuilder : MonoBehaviour
                 cam.orthographic = true; cam.orthographicSize = 0.15f;
                 cam.transform.position = _root.TransformPoint(new Vector3(xh, 0.5f, zt));
                 cam.transform.LookAt(_root.TransformPoint(new Vector3(xh, 5f, zt)), _root.TransformDirection(Vector3.right));
+            }
+            else if (name == "wicket")
+            {
+                // петли калитки снаружи: камера в 1,3 м перед полотном, сбоку от оси петель, на высоте 1,1 м
+                if (_wicketPivots.Count == 0) continue;
+                var pv = _wicketPivots[0];
+                Vector3 axis = pv.parent.TransformPoint(pv.localPosition + new Vector3(0f, 1.1f, 0f));
+                Vector3 outward = -_root.right, along = _root.forward * (_wicketHingeAtMin ? 1f : -1f);
+                cam.orthographic = false; cam.fieldOfView = 50f;
+                cam.transform.position = axis + outward * 1.3f - along * 0.7f + Vector3.up * 0.2f;
+                cam.transform.LookAt(axis + along * 0.3f);
             }
             else if (name == "menu")
             {
@@ -312,6 +326,7 @@ public class GateBuilder : MonoBehaviour
     /// <summary>Плавно открыть (если закрыты/закрываются) или закрыть.</summary>
     public void ToggleOpen()
     {
+        if (WicketOpen) return;
         bool opening = _anim != null ? _animTarget < 0.5f : Progress < 0.5f;
         AnimateTo(opening ? 1f : 0f);
     }
@@ -344,6 +359,7 @@ public class GateBuilder : MonoBehaviour
     /// <summary>0 — закрыты, 1 — открыты.</summary>
     public void SetProgress(float p)
     {
+        if (WicketOpen) return; // калитка открыта — ворота не поднимаются (как датчик калитки)
         Progress = Mathf.Clamp01(p);
         ApplyPose();
     }
@@ -389,6 +405,7 @@ public class GateBuilder : MonoBehaviour
         BuildTrack(-1);
         BuildSeals();
         AttachHandle();
+        BuildWicket();
         GateMaterials.ConvertRenderers(_root); // перекрытие реальными предметами + без «пластикового» блеска (MrLighting)
         ApplyPose();
 

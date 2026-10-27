@@ -44,6 +44,15 @@
   Комплектация: windowsEnabled / wicketEnabled (SetOptions, кнопки «Окна» и «Калитка» в меню на ладони).
   Калитка только при проёме ≥ wicketMinOpeningWidth × wicketMinOpeningHeight (2,0 × 2,0 м); без калитки окна
   ставятся равномерно, сколько помещается.
+  Калитка открывается рукой (`GateBuilder.Wicket.cs`, partial): всегда наружу, только при закрытых воротах; пока она
+  открыта, ворота не поднимаются (SetProgress/ToggleOpen игнорируются). Створка — по шарниру WicketLeaf в каждой секции
+  на одной оси (наружная плоскость, сторона петель — напротив ручки калитки). Обшивка не режется: копия детали на
+  створке + вырез шейдером (MaterialPropertyBlock `_ClipMode` 1/2, `_ClipMatrix`, `_ClipMin/_ClipMax` в системе секции),
+  поэтому гофры/дерево непрерывны. Кромки проёма — профили WicketJamb/WicketHead/WicketSill, петли WicketHinge.
+  Захват — копии невидимой `ruchka` (WicketGrab, снаружи и изнутри) со своими кинематическими Rigidbody (у оригинала
+  тоже свой — иначе ISDK собирает коллайдеры всех ручек с Rigidbody ворот). Проверка: поле debugWicketAngle, вид
+  снимка «wicket». Диагностика деталей секций: Tools → VorotaKraft → Dump gate parts (Logs/gate_parts_dump.txt).
+  После правки шейдера — Assets/Refresh в Edit Mode (в Play Mode импорт откладывается).
 - `MrLighting.cs` (объект MrLighting) — освещение для MR: ровный «комнатный» ambient (Trilight + SH) и своя кубкарта
   отражений вместо неба Unity; собственный направленный свет MrMainLight (из комнаты сверху, по осям ворот; точечный
   «Directional Light» сцены выключается); тень ворот на пол — FloorShadowCatcher (`Assets/Shaders/ShadowCatcher.shader`,

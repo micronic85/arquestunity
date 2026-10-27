@@ -62,6 +62,20 @@ Shader "VorotaKraft/GateLitOccluded"
         float _RibDepth;
         float _Stucco;
     CBUFFER_END
+
+    // Вырез калитки (MaterialPropertyBlock рендерера, не материала): точка объекта → система секции (_ClipMatrix),
+    // _ClipMode 1 — отбросить внутри [_ClipMin, _ClipMax] (полотно), 2 — снаружи (створка калитки)
+    float4x4 _ClipMatrix;
+    float4 _ClipMin;
+    float4 _ClipMax;
+    float _ClipMode;
+    void WicketClip(float3 positionOS)
+    {
+        if (_ClipMode < 0.5) return;
+        float3 p = mul(_ClipMatrix, float4(positionOS, 1.0)).xyz;
+        bool inside = all(p >= _ClipMin.xyz) && all(p <= _ClipMax.xyz);
+        clip(((_ClipMode < 1.5) == inside) ? -1.0 : 1.0);
+    }
     ENDHLSL
 
     SubShader
@@ -150,6 +164,7 @@ Shader "VorotaKraft/GateLitOccluded"
             {
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+                WicketClip(input.positionOS);
 
                 float2 uvS = input.uv;
                 if (_PlanarUV > 0.5) uvS.x = frac(uvS.x) * _PlanarURange;
@@ -245,7 +260,7 @@ Shader "VorotaKraft/GateLitOccluded"
             float3 _LightPosition;
 
             struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 positionOS : TEXCOORD1; };
 
             Varyings vert(Attributes input)
             {
@@ -266,11 +281,13 @@ Shader "VorotaKraft/GateLitOccluded"
             #endif
                 o.positionCS = positionCS;
                 o.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+                o.positionOS = input.positionOS.xyz;
                 return o;
             }
 
             half4 frag(Varyings input) : SV_Target
             {
+                WicketClip(input.positionOS);
                 half a = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).a * _BaseColor.a;
                 if (_AlphaClip > 0.5h) clip(a - _Cutoff);
                 if (_Transparent > 0.5h) clip(a - 0.5h);
@@ -294,7 +311,7 @@ Shader "VorotaKraft/GateLitOccluded"
             #pragma multi_compile_instancing
 
             struct Attributes { float4 positionOS : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct Varyings { float4 positionCS : SV_POSITION; UNITY_VERTEX_OUTPUT_STEREO };
+            struct Varyings { float4 positionCS : SV_POSITION; float3 positionOS : TEXCOORD0; UNITY_VERTEX_OUTPUT_STEREO };
 
             Varyings vert(Attributes input)
             {
@@ -302,9 +319,10 @@ Shader "VorotaKraft/GateLitOccluded"
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 o.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                o.positionOS = input.positionOS.xyz;
                 return o;
             }
-            half frag(Varyings input) : SV_Target { return 0; }
+            half frag(Varyings input) : SV_Target { WicketClip(input.positionOS); return 0; }
             ENDHLSL
         }
     }
