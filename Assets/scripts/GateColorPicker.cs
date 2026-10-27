@@ -492,8 +492,22 @@ public class GateColorPicker : MonoBehaviour
                 () => { marker.Cancel(); if (openings != null) openings.ClearManual(); SetStatus("ручная разметка удалена"); });
             clearText.text = "Убрать разметку";
             y -= smallH;
-            OnMarkerChanged();
         }
+        // Пересканировать комнату (новый объект, недосканированный верх проёма)
+        if (openings != null)
+        {
+            y -= tileGap;
+            PanelButton("ScanBtn", new Vector3(0, y - smallH * 0.5f, 0), width, smallH, out var scanText, () =>
+            {
+                if (openings.Scanning) return;
+                if (marker != null) marker.Cancel();
+                SetStatus("сканирование пространства…");
+                openings.RescanSpace(SetStatus);
+            });
+            scanText.text = "Сканировать пространство";
+            y -= smallH;
+        }
+        if (marker != null) OnMarkerChanged();
         return y;
     }
 
@@ -544,19 +558,47 @@ public class GateColorPicker : MonoBehaviour
         return q;
     }
 
-    static Transform Text(string name, Transform parent, string text, float w, float h)
+    // Подписи меню: размер шрифта подбираем сами (одна строка по ширине/высоте кнопки) —
+    // встроенный авторазмер TMP после смены текста застревал на мелком кегле
+    readonly List<(TextMeshPro tmp, string fitted)> _labels = new List<(TextMeshPro, string)>();
+    const float LabelFontMax = 0.15f;
+
+    Transform Text(string name, Transform parent, string text, float w, float h)
     {
         var go = new GameObject(name, typeof(RectTransform));
         go.transform.SetParent(parent, false);
         var tmp = go.AddComponent<TextMeshPro>();
-        tmp.text = text;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.color = Color.white;
-        tmp.enableAutoSizing = true;
-        tmp.fontSizeMin = 0.01f;
-        tmp.fontSizeMax = 0.15f;
+        tmp.enableAutoSizing = false;
+        tmp.textWrappingMode = TextWrappingModes.NoWrap;
         tmp.rectTransform.sizeDelta = new Vector2(w, h);
+        tmp.text = text;
+        FitLabel(tmp);
+        _labels.Add((tmp, text));
         return go.transform;
+    }
+
+    static void FitLabel(TextMeshPro tmp)
+    {
+        if (string.IsNullOrEmpty(tmp.text)) return;
+        var box = tmp.rectTransform.sizeDelta;
+        tmp.fontSize = 1f;
+        Vector2 pref = tmp.GetPreferredValues(tmp.text);
+        if (pref.x <= 1e-5f || pref.y <= 1e-5f) return;
+        tmp.fontSize = Mathf.Min(LabelFontMax, box.x / pref.x, box.y / pref.y);
+    }
+
+    void FitChangedLabels()
+    {
+        for (int i = _labels.Count - 1; i >= 0; i--)
+        {
+            var (tmp, fitted) = _labels[i];
+            if (tmp == null) { _labels.RemoveAt(i); continue; }
+            if (tmp.text == fitted) continue;
+            FitLabel(tmp);
+            _labels[i] = (tmp, tmp.text);
+        }
     }
 
     void UpdateHighlight()
@@ -576,6 +618,8 @@ public class GateColorPicker : MonoBehaviour
     }
 
     // ---------- update ----------
+
+    void LateUpdate() => FitChangedLabels(); // тексты кнопок/статуса меняются из Update и событий
 
     void Update()
     {

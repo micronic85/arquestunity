@@ -293,6 +293,39 @@ public class OpeningDetector : MonoBehaviour
     }
 
     /// <summary>Удалить все проёмы, размеченные вручную.</summary>
+    public bool Scanning { get; private set; }
+
+    /// <summary>
+    /// Принудительное сканирование: системная «Настройка пространства» Quest, затем перезагрузка
+    /// разметки MRUK и поиск проёмов заново. done — итоговый текст для строки статуса меню.
+    /// </summary>
+    public async void RescanSpace(System.Action<string> done = null)
+    {
+        if (Scanning) return;
+        if (MRUK.Instance == null) { done?.Invoke("нет MRUK в сцене"); return; }
+        Scanning = true;
+        string result;
+        try
+        {
+            bool captured = await OVRScene.RequestSpaceSetup();
+            var res = await MRUK.Instance.LoadSceneFromDevice(requestSceneCaptureIfNoDataFound: false);
+            if (res == MRUK.LoadDeviceResult.Success)
+            {
+                Rebuild();
+                result = (captured ? "пространство обновлено, " : "сканирование отменено, ") + Status;
+            }
+            else result = $"разметка не загружена ({res})";
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            result = "ошибка сканирования";
+        }
+        Scanning = false;
+        if (debugLogs) Debug.Log($"OpeningDetector: rescan → {result}");
+        done?.Invoke(result);
+    }
+
     public void ClearManual()
     {
         foreach (var o in _manual) { _openings.Remove(o); if (o.frame) Destroy(o.frame.gameObject); if (Selected == o) Selected = null; }
