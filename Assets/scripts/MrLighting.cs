@@ -37,7 +37,7 @@ public class MrLighting : MonoBehaviour
     public Color walls = new Color(0.50f, 0.50f, 0.49f);
     public Color floor = new Color(0.22f, 0.21f, 0.20f);
     public float ambientIntensity = 1f;
-    [Range(0f, 1f)] public float reflectionIntensity = 0.7f;
+    [Range(0f, 1f)] public float reflectionIntensity = 0.4f;
     [Tooltip("Минимальная шероховатость материалов ворот: без «пластикового» блеска")]
     [Range(0f, 1f)] public float roughnessMin = 0.3f;
 
@@ -59,8 +59,9 @@ public class MrLighting : MonoBehaviour
     public bool cameraAdaptation = true;
     [Tooltip("Яркость кадра камеры, при которой свет = номинальный")]
     public float referenceLuminance = 0.38f;
-    public Vector2 brightnessRange = new Vector2(0.45f, 1.4f);
-    [Range(0f, 1f)] public float tintAmount = 0.5f;
+    public Vector2 brightnessRange = new Vector2(0.6f, 1.15f);
+    [Tooltip("Сколько оттенка кадра камеры подмешивать в свет: на улице кадр серо-голубой, много — краска сереет")]
+    [Range(0f, 1f)] public float tintAmount = 0.15f;
     public float adaptSpeed = 1.5f;
 
     public bool debugLogs;

@@ -3991,7 +3991,7 @@ MonoBehaviour:
   walls: {r: 0.5, g: 0.5, b: 0.49, a: 1}
   floor: {r: 0.22, g: 0.21, b: 0.2, a: 1}
   ambientIntensity: 1
-  reflectionIntensity: 0.7
+  reflectionIntensity: 0.4
   roughnessMin: 0.3
   floorShadow: 1
   shadowTarget: {fileID: 0}
@@ -4002,8 +4002,8 @@ MonoBehaviour:
   softOcclusion: 0
   cameraAdaptation: 1
   referenceLuminance: 0.38
-  brightnessRange: {x: 0.45, y: 1.4}
-  tintAmount: 0.5
+  brightnessRange: {x: 0.6, y: 1.15}
+  tintAmount: 0.15
   adaptSpeed: 1.5
   debugLogs: 0
 --- !u!4 &574182035
@@ -7674,7 +7674,7 @@ MonoBehaviour:
   wallOffset: 0.02
   maxDistance: 10
   minLookDot: 0.6
-  debugLogs: 1
+  debugLogs: 0
   debugFitIndex: -1
 --- !u!4 &1127907207
 Transform:
@@ -12883,7 +12883,7 @@ MonoBehaviour:
   mrcActivationMode: 0
   launchSimultaneousHandsControllersOnStartup: 0
   isInsightPassthroughEnabled: 1
-  shouldBoundaryVisibilityBeSuppressed: 0
+  shouldBoundaryVisibilityBeSuppressed: 1
   requestBodyTrackingPermissionOnStartup: 0
   requestFaceTrackingPermissionOnStartup: 0
   requestEyeTrackingPermissionOnStartup: 0
@@ -28069,6 +28069,7 @@ MonoBehaviour:
   builder: {fileID: 0}
   openings: {fileID: 0}
   measure: {fileID: 0}
+  marker: {fileID: 0}
   pokeDepth: 0.015
   pokeCooldown: 0.4
   debugLogs: 0

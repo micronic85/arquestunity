@@ -44,26 +44,31 @@ public class OpeningDetector : MonoBehaviour
     public class Opening
     {
         public MRUKAnchor anchor;
+        /// <summary>Система координат проёма: x — по ширине, y — вверх, z (forward) — в комнату. У разметки Quest — якорь,
+        /// у ручной разметки — свой объект.</summary>
+        public Transform frame;
+        public bool manual;
+        public Transform Frame => frame != null ? frame : anchor.transform;
         public Rect rect;
         public Transform root;
         public Renderer[] bars;
         public TextMeshPro label;
         public float WidthM => rect.width;
         public float HeightM => rect.height;
-        public Vector3 Center => anchor.transform.TransformPoint(new Vector3(rect.center.x, rect.center.y, 0));
+        public Vector3 Center => Frame.TransformPoint(new Vector3(rect.center.x, rect.center.y, 0));
         /// <summary>Середина нижней кромки проёма (пол), мир.</summary>
         public Vector3 BottomCenter
         {
             get
             {
-                var p = anchor.transform.TransformPoint(new Vector3(rect.center.x, rect.yMin, 0));
+                var p = Frame.TransformPoint(new Vector3(rect.center.x, rect.yMin, 0));
                 if (floorY.HasValue && Mathf.Abs(p.y - floorY.Value) < 0.3f) p.y = floorY.Value; // низ проёма — на пол
                 return p;
             }
         }
         public float? floorY;
         /// <summary>Нормаль стены в сторону комнаты.</summary>
-        public Vector3 Inward => anchor.transform.forward;
+        public Vector3 Inward => Frame.forward;
     }
 
     public IReadOnlyList<Opening> Openings => _openings;
@@ -74,6 +79,12 @@ public class OpeningDetector : MonoBehaviour
     readonly List<Opening> _openings = new List<Opening>();
     Transform _head;
 
+    void Awake()
+    {
+        // ручная разметка проёмов (для высоких ворот) — живёт рядом, если в сцене её нет (в Awake — до меню)
+        if (FindFirstObjectByType<OpeningMarker>() == null) gameObject.AddComponent<OpeningMarker>().openings = this;
+    }
+
     void Start()
     {
         if (MRUK.Instance == null) { Status = "нет MRUK в сцене"; Changed?.Invoke(); return; }
@@ -82,8 +93,9 @@ public class OpeningDetector : MonoBehaviour
 
     public void Rebuild()
     {
-        foreach (var o in _openings) if (o.root) Destroy(o.root.gameObject);
+        foreach (var o in _openings) if (o.root && !o.manual) Destroy(o.root.gameObject);
         _openings.Clear();
+        _openings.AddRange(_manual); // ручная разметка переживает пересборку
         Selected = null;
 
         int rejected = 0;
@@ -113,11 +125,11 @@ public class OpeningDetector : MonoBehaviour
         }
 
         Status = _openings.Count > 0
-            ? $"проёмов найдено: {_openings.Count}" + (rejected > 0 ? $" (отброшено {rejected})" : "")
-            : "проёмы не найдены — отметьте дверь в настройке пространства";
+            ? $"проёмов: {_openings.Count}" + (rejected > 0 ? $" (отброшено {rejected})" : "")
+            : "проёмы не найдены — разметьте проём вручную";
         if (debugLogs)
             foreach (var o in _openings)
-                Debug.Log($"OpeningDetector: {o.anchor.Label} {o.WidthM * 1000:0}×{o.HeightM * 1000:0} мм at {o.BottomCenter}");
+                Debug.Log($"OpeningDetector: {(o.manual ? "ручной" : o.anchor.Label.ToString())} {o.WidthM * 1000:0}×{o.HeightM * 1000:0} мм at {o.BottomCenter}");
         Changed?.Invoke();
     }
 
@@ -155,8 +167,8 @@ public class OpeningDetector : MonoBehaviour
 
     void BuildHighlight(Opening o)
     {
-        var root = new GameObject("Opening_" + o.anchor.name).transform;
-        root.SetParent(o.anchor.transform, false);
+        var root = new GameObject("Opening_" + o.Frame.name).transform;
+        root.SetParent(o.Frame, false);
         root.localPosition = new Vector3(0, 0, wallOffset);
         o.root = root;
 
@@ -203,6 +215,7 @@ public class OpeningDetector : MonoBehaviour
 
     void Update()
     {
+        if (debugFitIndex >= 0 && debugLogs) Debug.Log($"OpeningDetector: debugFit {debugFitIndex} of {_openings.Count}");
         if (debugFitIndex >= 0 && debugFitIndex < _openings.Count)
         {
             var o = _openings[debugFitIndex]; debugFitIndex = -1;
@@ -227,7 +240,7 @@ public class OpeningDetector : MonoBehaviour
         Opening best = null; float bestDot = minLookDot;
         foreach (var o in _openings)
         {
-            if (o.anchor == null) continue;
+            if (o.anchor == null && o.frame == null) continue;
             Vector3 d = o.Center - _head.position;
             if (d.magnitude > maxDistance) continue;
             float dot = Vector3.Dot(_head.forward, d.normalized);
@@ -252,6 +265,39 @@ public class OpeningDetector : MonoBehaviour
                 b.transform.localScale = s;
             }
         }
+    }
+
+    readonly List<Opening> _manual = new List<Opening>();
+
+    /// <summary>Проём, размеченный вручную: нижние углы на полу (left, right), высота, нормаль стены в комнату.</summary>
+    public Opening AddManual(Vector3 left, Vector3 right, float height, Vector3 inward)
+    {
+        inward.y = 0; inward.Normalize();
+        var frame = new GameObject($"ManualOpening_{_manual.Count + 1}").transform;
+        frame.SetParent(transform, false);
+        frame.position = (left + right) * 0.5f;
+        frame.rotation = Quaternion.LookRotation(inward, Vector3.up);
+        float w = Vector3.Distance(new Vector3(left.x, 0, left.z), new Vector3(right.x, 0, right.z));
+        var o = new Opening { frame = frame, manual = true, rect = new Rect(-w * 0.5f, 0f, w, height), floorY = frame.position.y };
+        if (showHighlights) BuildHighlight(o);
+        _manual.Add(o);
+        _openings.Add(o);
+        // сразу выбранный — чтобы «Вписать» сработало, даже если взгляд ещё не на нём
+        if (Selected != null) { SetMaterial(Selected, lineMaterial); if (Selected.label) Selected.label.color = new Color(0.4f, 0.9f, 1f); }
+        Selected = o;
+        SetMaterial(o, selectedMaterial); if (o.label) o.label.color = Color.white;
+        Status = $"проёмов: {_openings.Count}";
+        if (debugLogs) Debug.Log($"OpeningDetector: ручной проём {w * 1000:0}×{height * 1000:0} мм at {o.BottomCenter}");
+        Changed?.Invoke();
+        return o;
+    }
+
+    /// <summary>Удалить все проёмы, размеченные вручную.</summary>
+    public void ClearManual()
+    {
+        foreach (var o in _manual) { _openings.Remove(o); if (o.frame) Destroy(o.frame.gameObject); if (Selected == o) Selected = null; }
+        _manual.Clear();
+        Changed?.Invoke();
     }
 
     public void SetVisible(bool v)

@@ -48,6 +48,11 @@
   высота пола из MRUK); Depth API — EnvironmentDepthManager, мягкое перекрытие, руки тоже перекрывают;
   подстройка яркости/оттенка по камере очков (PassthroughCameraAccess, разрешение horizonos.permission.HEADSET_CAMERA,
   только Quest 3/3S, Horizon OS ≥ 74).
+- `OpeningMarker.cs` (добавляется на OpeningDetector) — ручная разметка проёма для высоких ворот, до верха которых
+  не достаёт сканер Quest: луч (правый контроллер — курок, рука — щипок) → левый и правый нижние углы на полу,
+  затем верх — пересечение луча с вертикальной плоскостью стены; B — шаг назад. Проём добавляется в OpeningDetector
+  (AddManual, ClearManual), дальше «Вписать ворота» как обычно. Кнопки «Разметить проём» / «Убрать разметку» в меню.
+- Guardian отключён: OVRManager.shouldBoundaryVisibilityBeSuppressed + BOUNDARYLESS_APP в манифесте.
 - `GateMaterials.cs` + `Assets/Shaders/GateLitOccluded.shader` — материалы glTFast ворот конвертируются в PBR-шейдер
   с перекрытием Depth API (GateBuilder.Rebuild и GateColorPicker.Apply); нижняя граница шероховатости 0,3,
   резина — неметалл. Depth API требует пакет com.unity.xr.meta-openxr (2.4.1) и OpenXR-фичи Meta Quest Session +

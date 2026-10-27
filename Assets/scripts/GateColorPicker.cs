@@ -79,6 +79,8 @@ public class GateColorPicker : MonoBehaviour
     [Header("Measure")]
     [Tooltip("Замер рулеткой DISTO; пусто — найдётся в сцене, если есть")]
     public DistoMeasure measure;
+    [Tooltip("Ручная разметка проёма (для высоких ворот)")]
+    public OpeningMarker marker;
 
     [Header("Poke")]
     [Tooltip("Глубина зоны нажатия перед/за плиткой, м")]
@@ -117,7 +119,7 @@ public class GateColorPicker : MonoBehaviour
     readonly List<Button> _buttons = new List<Button>();
 
     // Блок замера
-    TextMeshPro _widthText, _heightText, _statusText, _openText, _fitText, _windowsText, _wicketText;
+    TextMeshPro _widthText, _heightText, _statusText, _openText, _fitText, _windowsText, _wicketText, _markText;
     Transform _widthBtn, _heightBtn, _fieldHighlight;
 
     bool _menuVisible;
@@ -132,6 +134,8 @@ public class GateColorPicker : MonoBehaviour
         if (builder != null) builder.Built += RefreshTargets;
         if (openings == null) openings = FindFirstObjectByType<OpeningDetector>();
         if (measure == null) measure = FindFirstObjectByType<DistoMeasure>();
+        if (marker == null) marker = FindFirstObjectByType<OpeningMarker>();
+        if (marker != null) marker.Changed += OnMarkerChanged;
         BuildMenu();
         RefreshTargets();
         if (measure != null) { measure.Changed += RefreshMeasure; RefreshMeasure(); }
@@ -264,6 +268,13 @@ public class GateColorPicker : MonoBehaviour
     }
 
     void SetStatus(string s) { if (_statusText != null) _statusText.text = s; }
+
+    void OnMarkerChanged()
+    {
+        if (marker == null) return;
+        if (_markText != null) _markText.text = marker.Active ? "Отменить разметку" : "Разметить проём";
+        if (!string.IsNullOrEmpty(marker.Hint)) SetStatus(marker.Hint);
+    }
 
     // glTFast-шейдеры: baseColorFactor / roughnessFactor; URP Lit: _BaseColor / _Smoothness
     static void SetColor(Material m, Color c)
@@ -409,6 +420,17 @@ public class GateColorPicker : MonoBehaviour
             PanelButton("FitBtn", new Vector3(0, y - smallH * 0.5f, 0), width, smallH, out _fitText, FitToOpening);
             _fitText.text = "Вписать ворота в проём";
             y -= smallH;
+        }
+        // Ручная разметка — для высоких проёмов, которые сканер Quest не видит целиком
+        if (marker != null)
+        {
+            y -= tileGap;
+            PanelButton("MarkBtn", new Vector3(xl, y - smallH * 0.5f, 0), half, smallH, out _markText, () => marker.Toggle());
+            PanelButton("ClearMarksBtn", new Vector3(xr, y - smallH * 0.5f, 0), half, smallH, out var clearText,
+                () => { marker.Cancel(); if (openings != null) openings.ClearManual(); SetStatus("ручная разметка удалена"); });
+            clearText.text = "Убрать разметку";
+            y -= smallH;
+            OnMarkerChanged();
         }
         return y;
     }
@@ -599,6 +621,7 @@ public class GateColorPicker : MonoBehaviour
     {
         if (builder != null) builder.Built -= RefreshTargets;
         if (measure != null) measure.Changed -= RefreshMeasure;
+        if (marker != null) marker.Changed -= OnMarkerChanged;
         if (_menu != null) Destroy(_menu.gameObject);
     }
 }

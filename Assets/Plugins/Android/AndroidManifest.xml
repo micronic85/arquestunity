@@ -21,6 +21,8 @@
   <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
   <!-- Камера очков (Passthrough Camera API): подстройка яркости и оттенка ворот под комнату (MrLighting) -->
   <uses-permission android:name="horizonos.permission.HEADSET_CAMERA" />
+  <!-- Без защитной границы Quest: ходим по объекту свободно, окружение видно в passthrough (OVRManager.shouldBoundaryVisibilityBeSuppressed) -->
+  <uses-feature android:name="com.oculus.feature.BOUNDARYLESS_APP" android:required="true" />
   <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
   <uses-feature android:name="android.hardware.vr.headtracking" android:version="1" android:required="true" />
   <horizonos:uses-horizonos-sdk horizonos:minSdkVersion="60" horizonos:targetSdkVersion="85" />
