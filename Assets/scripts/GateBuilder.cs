@@ -189,7 +189,7 @@ public partial class GateBuilder : MonoBehaviour
         cam.fieldOfView = 40f;
         Vector3 c = _root.TransformPoint(new Vector3(1.2f, CurtainHeight * 0.6f, 0));
         float dist = Mathf.Max(CurtainWidth, CurtainHeight + 2f) * 1.9f;
-        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero), ("botL", Vector3.zero), ("botR", Vector3.zero), ("user", Vector3.zero), ("seals", Vector3.zero), ("floor", Vector3.zero), ("menu", Vector3.zero), ("wicket", Vector3.zero) };
+        var views = new (string, Vector3)[] { ("front", new Vector3(-1, 0.15f, 0)), ("side", new Vector3(0, 0.1f, 1)), ("iso", new Vector3(-0.8f, 0.6f, 0.9f)), ("corner", Vector3.zero), ("hanger", Vector3.zero), ("under", Vector3.zero), ("botL", Vector3.zero), ("botR", Vector3.zero), ("user", Vector3.zero), ("seals", Vector3.zero), ("floor", Vector3.zero), ("menu", Vector3.zero), ("wicket", Vector3.zero), ("arm", Vector3.zero) };
         var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
         foreach (var (name, dir) in views)
         {
@@ -209,6 +209,14 @@ public partial class GateBuilder : MonoBehaviour
                 cam.orthographic = true; cam.orthographicSize = 0.15f;
                 cam.transform.position = _root.TransformPoint(new Vector3(xh, 0.5f, zt));
                 cam.transform.LookAt(_root.TransformPoint(new Vector3(xh, 5f, zt)), _root.TransformDirection(Vector3.right));
+            }
+            else if (name == "arm")
+            {
+                // тяга привода сбоку: камера внутри ширины ворот, в 1,6 м от средней плоскости
+                Vector3 target = _root.TransformPoint(new Vector3(0.45f, CurtainHeight + 0.25f, 0f));
+                cam.orthographic = false; cam.fieldOfView = 50f;
+                cam.transform.position = target + _root.forward * 1.6f;
+                cam.transform.LookAt(target);
             }
             else if (name == "wicket")
             {
@@ -591,8 +599,9 @@ public partial class GateBuilder : MonoBehaviour
 
         foreach (var p in parts)
         {
-            // тяга — пока без анимации; горизонтальные профили заменяет процедурная направляющая
-            if (p.name == "DriveArm" || p.name.StartsWith("HorizProfile")) { p.gameObject.SetActive(false); continue; }
+            // тяга привода двигается вместе с верхней секцией (GateBuilder.DriveArm.cs); горизонтальные профили заменяет процедурная направляющая
+            if (p.name == "DriveArm") { SetupDriveArm(hw, p); continue; } // тяга двигается в ApplyPose
+            if (p.name.StartsWith("HorizProfile")) { p.gameObject.SetActive(false); continue; }
             if (!LocalBounds(hw, p, out var b)) continue;
             if (debugLogs) Debug.Log($"[GateBuilder] part {p.name} min={b.min.ToString("F3")} max={b.max.ToString("F3")}");
             bool sx = b.size.x > 0.5f * D0, sy = b.size.y > 0.5f * HT0, sz = b.size.z > 0.5f * W0;
@@ -760,6 +769,7 @@ public partial class GateBuilder : MonoBehaviour
             sec.localRotation = Quaternion.FromToRotation(Vector3.up, new Vector3(t.x - b.x, t.y - b.y, 0f));
             s = s2;
         }
+        UpdateDriveArm();
     }
 
     // ---------- направляющие ----------

@@ -13,7 +13,7 @@ public static class GateDumpParts
         var sb = new StringBuilder();
         foreach (Transform s in gb.Root)
         {
-            if (!s.name.StartsWith("Section_")) continue;
+            if (!s.name.StartsWith("Section_") && s.name != "Hardware") continue;
             sb.AppendLine($"== {s.name} pos={s.localPosition.ToString("F3")}");
             foreach (var mf in s.GetComponentsInChildren<MeshFilter>(true))
             {

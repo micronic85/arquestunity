@@ -53,6 +53,9 @@
   тоже свой — иначе ISDK собирает коллайдеры всех ручек с Rigidbody ворот). Проверка: поле debugWicketAngle, вид
   снимка «wicket». Диагностика деталей секций: Tools → VorotaKraft → Dump gate parts (Logs/gate_parts_dump.txt).
   После правки шейдера — Assets/Refresh в Edit Mode (в Play Mode импорт откладывается).
+  Тяга привода (`GateBuilder.DriveArm.cs`): DriveArm — жёсткое звено между кронштейном на верхней кромке верхней секции
+  и кареткой DriveTrolley на шине DriveRail; шарниры сняты с меша (ArmDoorPin0/ArmTrolleyPin0), каретка едет по шине
+  так, чтобы длина тяги не менялась (UpdateDriveArm из ApplyPose). Вид снимка «arm».
 - `MrLighting.cs` (объект MrLighting) — освещение для MR: ровный «комнатный» ambient (Trilight + SH) и своя кубкарта
   отражений вместо неба Unity; собственный направленный свет MrMainLight (из комнаты сверху, по осям ворот; точечный
   «Directional Light» сцены выключается); тень ворот на пол — FloorShadowCatcher (`Assets/Shaders/ShadowCatcher.shader`,
@@ -93,7 +96,7 @@
 - Проверка на устройстве — только в шлеме, Claude этого сделать не может.
 
 ## TODO
-- Адаптивные ворота: тяга привода (DriveArm) пока скрыта — анимировать; убрать из сцены прежнюю lastvorota.glb
+- Адаптивные ворота: убрать из сцены прежнюю lastvorota.glb
   (сейчас только скрыта, но попадает в сборку); подогнать liftRadius/horizontalExtra под реальные ворота.
 - Решить: масштаб для примерки 1:1 (сейчас allowScale = true).
 - Позже (после доводки одних ворот, освещения и модели): несколько ворот на объекте. План: общий реестр
