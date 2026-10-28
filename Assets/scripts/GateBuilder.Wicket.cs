@@ -14,6 +14,8 @@ using UnityEngine;
 public partial class GateBuilder
 {
     [Header("Калитка")]
+    [Tooltip("Высота калитки от пола (верх рамки), м — стандарт 2000 мм; выше рамка не идёт, сколько бы ни было секций")]
+    public float wicketHeight = 2.0f;
     [Tooltip("Максимальный угол открывания калитки, °")]
     public float wicketMaxAngle = 100f;
     [Range(-1f, 100f)]
@@ -52,6 +54,7 @@ public partial class GateBuilder
         // Рамка калитки в каждой секции (в координатах секции)
         int n = _sections.Count, top = -1;
         var frame = new Bounds?[n];
+        var frameParts = new List<Transform>[n];
         Material alu = null;
         Bounds? handle = null; int handleSec = -1;
         for (int i = 0; i < n; i++)
@@ -63,11 +66,39 @@ public partial class GateBuilder
                 if (pn == "WicketHandle") { handle = b; handleSec = i; continue; }
                 if (!pn.StartsWith("калитка") || b.size.z > 0.5f * W0) continue;
                 if (frame[i] == null) frame[i] = b; else { var f = frame[i].Value; f.Encapsulate(b); frame[i] = f; }
+                (frameParts[i] ??= new List<Transform>()).Add(w);
                 if (alu == null) { var r = w.GetComponentInChildren<Renderer>(true); if (r) alu = r.sharedMaterial; }
             }
-            if (frame[i] != null) top = i;
         }
-        if (top < 0 || frame[0] == null) return;
+        if (frame[0] == null) return;
+
+        // Высота калитки стандартная: верх рамки на wicketHeight от пола. Секции целиком выше — без калитки,
+        // в секции, через которую проходит верх, рамка обрезается шейдером и получает верхнюю перекладину.
+        float secBottom = 0f;
+        float topCut = float.PositiveInfinity; // верх калитки в системе секции top (∞ — рамка модели ниже)
+        for (int i = 0; i < n; i++)
+        {
+            float local = wicketHeight - secBottom;
+            secBottom += _heights[i];
+            if (frame[i] == null) continue;
+            if (local < 0.05f)
+            {
+                foreach (var w in frameParts[i]) w.gameObject.SetActive(false); // рамка выше калитки
+                frame[i] = null;
+                continue;
+            }
+            top = i;
+            if (local < frame[i].Value.max.y - 0.005f)
+            {
+                topCut = local;
+                var f = frame[i].Value; f.max = new Vector3(f.max.x, local, f.max.z); frame[i] = f;
+                // остальные секции выше — уже без калитки
+                for (int k = i + 1; k < n; k++)
+                    if (frameParts[k] != null) foreach (var w in frameParts[k]) w.gameObject.SetActive(false);
+                break;
+            }
+        }
+        if (top < 0) return;
 
         float z0 = float.MaxValue, z1 = float.MinValue, xOut = float.MaxValue, xIn = float.MinValue;
         for (int i = 0; i <= top; i++)
@@ -78,6 +109,17 @@ public partial class GateBuilder
             xOut = Mathf.Min(xOut, f.min.x); xIn = Mathf.Max(xIn, f.max.x);
         }
         float yBot = frame[0].Value.min.y, yTop = frame[top].Value.max.y;
+        if (!float.IsPositiveInfinity(topCut))
+        {
+            // рамку верхнего куска — по линии верха калитки; перекладина — на створку
+            var cutMin = new Vector4(-10f, -10f, -10f, 0f); var cutMax = new Vector4(10f, topCut, 10f, 0f);
+            foreach (var w in frameParts[top])
+                foreach (var r in w.GetComponentsInChildren<Renderer>(true))
+                    SetClip(r, 2f, _sections[top].worldToLocalMatrix * r.transform.localToWorldMatrix, cutMin, cutMax);
+            const float bar = 0.035f;
+            AddBox(_sections[top], "WicketTopBar", new Vector3((xOut + xIn) * 0.5f, topCut - bar * 0.5f, (z0 + z1) * 0.5f),
+                new Vector3(xIn - xOut, bar, z1 - z0), alu);
+        }
         // Петли — со стороны, противоположной ручке калитки
         _wicketHingeAtMin = handle == null || handle.Value.center.z > (z0 + z1) * 0.5f;
         float hingeZ = _wicketHingeAtMin ? z0 : z1;
@@ -125,8 +167,12 @@ public partial class GateBuilder
                         SetClip(dst[k], 2f, m, clipMin, clipMax);
                     }
                 }
+                else if (pn.StartsWith("калитка") && w.gameObject.activeSelf)
+                    w.SetParent(pivot, true); // рамка створки (в верхнем куске обрезана по верху калитки)
                 else if (b.min.z >= z0 - 0.01f && b.max.z <= z1 + 0.01f && b.min.y >= lo - 0.01f && b.max.y <= hi + 0.01f)
-                    w.SetParent(pivot, true); // рамка, ручка калитки, окно в калитке
+                    w.SetParent(pivot, true); // рамка, ручка калитки, окно в калитке, верхняя перекладина
+                else if (i == top && b.min.z < z1 && b.max.z > z0 && b.min.y < hi && b.max.y > hi)
+                    w.gameObject.SetActive(false); // окно на линии верха калитки — его разрезало бы, убираем
             }
             if (panelMin > panelMax) { panelMin = 0f; panelMax = _heights[i]; }
 

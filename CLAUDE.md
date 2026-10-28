@@ -50,7 +50,9 @@
   створке + вырез шейдером (MaterialPropertyBlock `_ClipMode` 1/2, `_ClipMatrix`, `_ClipMin/_ClipMax` в системе секции),
   поэтому гофры/дерево непрерывны. Кромки проёма — профили WicketJamb/WicketHead/WicketSill, петли WicketHinge.
   Захват — копии невидимой `ruchka` (WicketGrab, снаружи и изнутри) со своими кинематическими Rigidbody (у оригинала
-  тоже свой — иначе ISDK собирает коллайдеры всех ручек с Rigidbody ворот). Проверка: поле debugWicketAngle, вид
+  тоже свой — иначе ISDK собирает коллайдеры всех ручек с Rigidbody ворот). Высота калитки стандартная — wicketHeight = 2,0 м от пола:
+  рамка в секциях выше скрывается, в секции на линии верха обрезается шейдером + перекладина WicketTopBar; окно,
+  попавшее на линию верха калитки, скрывается. Проверка: поле debugWicketAngle, вид
   снимка «wicket». Диагностика деталей секций: Tools → VorotaKraft → Dump gate parts (Logs/gate_parts_dump.txt).
   После правки шейдера — Assets/Refresh в Edit Mode (в Play Mode импорт откладывается).
   Тяга привода (`GateBuilder.DriveArm.cs`): DriveArm — жёсткое звено между кронштейном на верхней кромке верхней секции
