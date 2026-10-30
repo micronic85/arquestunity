@@ -61,8 +61,12 @@ public class GateColorPicker : MonoBehaviour
     [Tooltip("Материал рамки выбранной плитки (URP Unlit)")]
     public Material highlightMaterial;
     public int columns = 4;
-    public float tileSize = 0.035f;
-    public float tileGap = 0.01f;
+    [Tooltip("Ширина меню, м")]
+    public float menuWidth = 0.22f;
+    [Tooltip("Высота кнопки, м (Meta: цель для пальца ≥ 2,2 см, удобнее ≥ 3)")]
+    public float buttonHeight = 0.032f;
+    [Tooltip("Зазор между кнопками, м")]
+    public float buttonGap = 0.008f;
     [Tooltip("Насколько меню поднято над ладонью, м")]
     public float palmOffset = 0.1f;
     [Tooltip("Показать меню, когда ладонь смотрит на лицо сильнее порога (cos угла)")]
@@ -83,16 +87,20 @@ public class GateColorPicker : MonoBehaviour
     public OpeningMarker marker;
 
     [Header("Poke")]
-    [Tooltip("Глубина зоны нажатия перед/за плиткой, м")]
-    public float pokeDepth = 0.015f;
+    [Tooltip("Палец ближе этого перед кнопкой — подсветка, м")]
+    public float hoverDistance = 0.05f;
+    [Tooltip("Нажатие — палец дошёл до этого расстояния перед плоскостью кнопки, м")]
+    public float pressDepth = 0.004f;
+    [Tooltip("Действие — когда палец отведён назад на это расстояние, м")]
+    public float releaseDistance = 0.012f;
     public float pokeCooldown = 0.4f;
 
     [Header("Debug")]
     public bool debugLogs = false;
     [Tooltip("Проверка в редакторе: индекс цвета палитры (применяется один раз)")]
     public int debugApply = -1;
-    [Tooltip("Проверка в редакторе: раскрыть/свернуть палитру")]
-    public bool debugTogglePalette;
+    [Tooltip("Проверка в редакторе: открыть вкладку (0 — Ворота, 1 — Цвет, 2 — Замер, 3 — Проём) и показать меню")]
+    public int debugTab = -1;
 
     class HandRef
     {
@@ -113,14 +121,13 @@ public class GateColorPicker : MonoBehaviour
     Transform _head;
     Transform _menu;
     readonly List<Transform> _tiles = new List<Transform>();
-    bool _paletteOpen;   // палитра раскрыта (иначе — одна строка с текущим цветом)
+    Tab _tab = Tab.Gate;
     TextMeshPro _headText;
     Renderer _swatch;
     Transform _highlight;
     int _selected = -1;
 
-    // Всё, что нажимается пальцем: плитки цветов и кнопки замера
-    class Button { public Transform t; public Vector2 half; public Action press; }
+    // Всё, что нажимается пальцем: вкладки, кнопки, плитки цветов
     readonly List<Button> _buttons = new List<Button>();
 
     // Блок замера
@@ -321,104 +328,196 @@ public class GateColorPicker : MonoBehaviour
     }
 
     // ---------- menu ----------
+    // Меню из вкладок «Ворота / Цвет / Замер / Проём»: на каждой — несколько крупных кнопок (≥ 3 см),
+    // внизу — строка статуса. Кнопки — скруглённые плашки, текст — свой SDF-шрифт с кириллицей (MenuFont).
+
+    public enum Tab { Gate, Color, Measure, Opening }
+    static readonly string[] TabNames = { "Ворота", "Цвет", "Замер", "Проём" };
+
+    static readonly Color ColBg = new Color(0.07f, 0.075f, 0.09f, 1f);
+    static readonly Color ColButton = new Color(0.19f, 0.21f, 0.26f, 1f);
+    static readonly Color ColHover = new Color(0.29f, 0.32f, 0.40f, 1f);
+    static readonly Color ColAccent = new Color(0.16f, 0.46f, 0.88f, 1f);
+    static readonly Color ColText = new Color(0.95f, 0.96f, 0.98f, 1f);
+    static readonly Color ColDim = new Color(0.62f, 0.65f, 0.72f, 1f);
+
+    static TMP_FontAsset _font;
+    static bool _fontLoaded;
+    /// <summary>Шрифт меню и подписей (Resources/Fonts/MenuFont SDF); нет — шрифт TMP по умолчанию.</summary>
+    public static TMP_FontAsset MenuFont
+    {
+        get
+        {
+            if (!_fontLoaded) { _font = Resources.Load<TMP_FontAsset>("Fonts/MenuFont SDF"); _fontLoaded = true; }
+            return _font;
+        }
+    }
+
+    Vector2 _menuHalf; // половина размера меню (для «палец рядом»)
 
     void BuildMenu()
     {
         _menu = new GameObject("GateColorMenu").transform;
+        var audio = _menu.gameObject.AddComponent<AudioSource>();
+        audio.playOnAwake = false; audio.spatialBlend = 1f; audio.volume = 0.6f; audio.minDistance = 0.3f;
+        audio.clip = ClickClip();
+        _click = audio;
 
-        int rows = Mathf.CeilToInt(_palette.Count / (float)columns);
-        float step = tileSize + tileGap;
-        float labelH = tileSize * 0.45f;
-        float rowStep = step + labelH;
-        float width = columns * step - tileGap;
-
-        // Раскладка сверху вниз от y = 0, в конце всё центрируется
+        float W = menuWidth, g = buttonGap, H = buttonHeight;
+        float half = (W - g) * 0.5f;
+        float xl = -W * 0.5f + half * 0.5f, xr = W * 0.5f - half * 0.5f;
         float y = 0f;
 
-        // Строка выбора цвета: образец текущего цвета + название; нажатие раскрывает/сворачивает палитру
-        float headH = 0.026f;
-        PanelButton("ColorHeader", new Vector3(0, y - headH * 0.5f, 0), width, headH, out _headText,
-            () => { _paletteOpen = !_paletteOpen; RebuildMenu(); });
-        var sw = GameObject.CreatePrimitive(PrimitiveType.Quad).transform;
-        Destroy(sw.GetComponent<Collider>());
-        sw.name = "CurrentSwatch";
-        sw.SetParent(_menu, false);
-        sw.localPosition = new Vector3(-width * 0.5f + headH * 0.5f + 0.003f, y - headH * 0.5f, -0.0015f);
-        sw.localScale = new Vector3(headH * 0.75f, headH * 0.75f, 1f);
-        _swatch = sw.GetComponent<Renderer>();
-        // текст правее образца, чтобы не наезжал на него
-        var hr = _headText.rectTransform;
-        hr.sizeDelta = new Vector2(width - headH * 2.2f, hr.sizeDelta.y);
-        hr.localPosition += new Vector3(headH * 0.5f, 0, 0);
-        UpdateHeader();
-        y -= headH + tileGap;
-
-        _highlight = Quad("Highlight", _menu, highlightMaterial, Color.white);
-        _highlight.localScale = new Vector3(tileSize + 0.006f, tileSize + 0.006f, 1f);
-        _highlight.gameObject.SetActive(false);
-
-        if (_paletteOpen)
+        // Вкладки
+        float tabW = (W - g * 3f) / 4f, tabH = H * 0.85f;
+        for (int i = 0; i < 4; i++)
         {
-            for (int i = 0; i < _palette.Count; i++)
+            var tab = (Tab)i;
+            var b = PanelButton("Tab_" + i, new Vector3(-W * 0.5f + tabW * 0.5f + i * (tabW + g), y - tabH * 0.5f, 0), tabW, tabH,
+                out var tt, () => { if (_tab != tab) { _tab = tab; RebuildMenu(); } });
+            tt.text = TabNames[i];
+            if (tab == _tab) { b.baseColor = ColAccent; b.SetColor(ColAccent); }
+        }
+        y -= tabH + g * 1.5f;
+
+        switch (_tab)
+        {
+            case Tab.Gate:
+                if (builder != null)
+                {
+                    PanelButton("OpenBtn", new Vector3(xl, y - H * 0.5f, 0), half, H, out _openText, () => builder.ToggleOpen());
+                    // замер/разметку сделали снаружи — направляющие ушли на улицу: развернуть в том же проёме
+                    PanelButton("FlipBtn", new Vector3(xr, y - H * 0.5f, 0), half, H, out var flipText, () => builder.FlipSide());
+                    flipText.text = "Развернуть 180°";
+                    y -= H + g;
+                    // Комплектация: окна и калитка (калитка — только если проём позволяет)
+                    PanelButton("WindowsBtn", new Vector3(xl, y - H * 0.5f, 0), half, H, out _windowsText,
+                        () => builder.SetOptions(!builder.windowsEnabled, builder.wicketEnabled));
+                    PanelButton("WicketBtn", new Vector3(xr, y - H * 0.5f, 0), half, H, out _wicketText,
+                        () => { if (builder.WicketAllowed) builder.SetOptions(builder.windowsEnabled, !builder.wicketEnabled); });
+                    y -= H;
+                }
+                break;
+
+            case Tab.Color:
             {
-                int c = i % columns, row = i / columns;
-                float x = -width * 0.5f + tileSize * 0.5f + c * step;
-                float ty = y - tileSize * 0.5f - row * rowStep;
+                // Текущий цвет: образец + название
+                float headH = H * 0.8f;
+                var sw = RoundedQuad("CurrentSwatch", _menu, headH * 0.8f, headH * 0.8f, 0.004f, ColText);
+                sw.localPosition = new Vector3(-W * 0.5f + headH * 0.5f, y - headH * 0.5f, 0);
+                _swatch = sw.GetComponent<Renderer>();
+                _headText = Text("ColorHead", _menu, "", W - headH * 1.4f, headH * 0.55f).GetComponent<TextMeshPro>();
+                _headText.alignment = TextAlignmentOptions.Left;
+                _headText.transform.localPosition = new Vector3(headH * 0.7f, y - headH * 0.5f, -0.001f);
+                UpdateHeader();
+                y -= headH + g;
 
-                var tile = GameObject.CreatePrimitive(PrimitiveType.Quad).transform;
-                Destroy(tile.GetComponent<Collider>());
-                tile.name = "Tile_" + i;
-                tile.SetParent(_menu, false);
-                tile.localPosition = new Vector3(x, ty, 0);
-                tile.localScale = new Vector3(tileSize, tileSize, 1f);
-                if (_palette[i].tile != null) tile.GetComponent<Renderer>().sharedMaterial = _palette[i].tile;
-                _tiles.Add(tile);
-                int index = i;
-                // выбор цвета сворачивает палитру
-                AddButton(tile, tileSize, tileSize, () => { Apply(index); _paletteOpen = false; RebuildMenu(); });
-
-                Text("Label_" + i, _menu, _palette[i].label, step * 0.95f, labelH)
-                    .localPosition = new Vector3(x, ty - tileSize * 0.5f - labelH * 0.5f, 0);
+                // Плитки цветов
+                int cols = Mathf.Max(1, columns);
+                float tile = (W - g * (cols - 1)) / cols;
+                float tileH = tile * 0.72f, labelH = H * 0.42f, rowStep = tileH + labelH + g;
+                _highlight = RoundedQuad("Highlight", _menu, tile + 0.008f, tileH + 0.008f, 0.008f, ColAccent);
+                _highlight.gameObject.SetActive(false);
+                for (int i = 0; i < _palette.Count; i++)
+                {
+                    int c = i % cols, row = i / cols;
+                    float x = -W * 0.5f + tile * 0.5f + c * (tile + g);
+                    float ty = y - tileH * 0.5f - row * rowStep;
+                    var t = RoundedQuad("Tile_" + i, _menu, tile, tileH, 0.005f, Color.white);
+                    t.localPosition = new Vector3(x, ty, 0);
+                    if (_palette[i].tile != null) t.GetComponent<Renderer>().sharedMaterial = _palette[i].tile;
+                    // дерево: в атласе текстуры справа (U > 0,84) пусто — на плитке только рабочая часть
+                    if (_palette[i].textured) t.GetComponent<MeshFilter>().sharedMesh = RoundedMesh(tile, tileH, 0.005f, 0.8f);
+                    _tiles.Add(t);
+                    int index = i;
+                    AddButton(t, tile, tileH + labelH, () => Apply(index), null, true); // зона нажатия — с подписью
+                    var lab = Text("Label_" + i, _menu, _palette[i].label.Replace("\n", " "), tile, labelH * 0.8f);
+                    lab.localPosition = new Vector3(x, ty - tileH * 0.5f - labelH * 0.5f, -0.001f);
+                    lab.GetComponent<TextMeshPro>().color = ColDim;
+                }
+                int rows = Mathf.CeilToInt(_palette.Count / (float)cols);
+                y -= rows * rowStep - g;
+                break;
             }
-            y -= rows * rowStep;
+
+            case Tab.Measure:
+                if (measure != null)
+                {
+                    float bigH = H * 1.35f;
+                    _fieldHighlight = RoundedQuad("FieldHighlight", _menu, half + 0.006f, bigH + 0.006f, 0.008f, ColAccent);
+                    _widthBtn = PanelButton("WidthBtn", new Vector3(xl, y - bigH * 0.5f, 0), half, bigH, out _widthText,
+                        () => measure.SetNext(DistoMeasure.Field.Width), 0.62f).t;
+                    _heightBtn = PanelButton("HeightBtn", new Vector3(xr, y - bigH * 0.5f, 0), half, bigH, out _heightText,
+                        () => measure.SetNext(DistoMeasure.Field.Height), 0.62f).t;
+                    y -= bigH + g;
+                    PanelButton("ConnectBtn", new Vector3(xl, y - H * 0.5f, 0), half, H, out var connectText, () => measure.Connect());
+                    connectText.text = "Подключить DISTO";
+                    PanelButton("ResetBtn", new Vector3(xr, y - H * 0.5f, 0), half, H, out var resetText, () => measure.ResetValues());
+                    resetText.text = "Сбросить";
+                    y -= H + g;
+                }
+                if (builder != null)
+                {
+                    PanelButton("FitBtn", new Vector3(0, y - H * 0.5f, 0), W, H, out _fitText, FitToOpening);
+                    _fitText.text = "Вписать ворота в проём";
+                    y -= H;
+                }
+                break;
+
+            case Tab.Opening:
+                if (builder != null)
+                {
+                    PanelButton("FitBtn", new Vector3(0, y - H * 0.5f, 0), W, H, out _fitText, FitToOpening);
+                    _fitText.text = "Вписать ворота в проём";
+                    y -= H + g;
+                }
+                // Ручная разметка — для высоких проёмов, которые сканер Quest не видит целиком
+                if (marker != null)
+                {
+                    PanelButton("MarkBtn", new Vector3(xl, y - H * 0.5f, 0), half, H, out _markText, () => marker.Toggle());
+                    PanelButton("ClearMarksBtn", new Vector3(xr, y - H * 0.5f, 0), half, H, out var clearText,
+                        () => { marker.Cancel(); if (openings != null) openings.ClearManual(); SetStatus("ручная разметка удалена"); });
+                    clearText.text = "Убрать разметку";
+                    y -= H + g;
+                }
+                // Пересканировать комнату (новый объект, недосканированный верх проёма)
+                if (openings != null)
+                {
+                    PanelButton("ScanBtn", new Vector3(0, y - H * 0.5f, 0), W, H, out var scanText, () =>
+                    {
+                        if (openings.Scanning) return;
+                        if (marker != null) marker.Cancel();
+                        SetStatus("сканирование пространства…");
+                        openings.RescanSpace(SetStatus);
+                    });
+                    scanText.text = "Сканировать пространство";
+                    y -= H;
+                }
+                break;
         }
 
-        // Открыть / закрыть адаптивные ворота
-        if (builder != null)
-        {
-            y -= 0.006f;
-            float half = (width - tileGap) * 0.5f, optH = 0.02f;
-            float xl = -width * 0.5f + half * 0.5f, xr = width * 0.5f - half * 0.5f;
-            PanelButton("OpenBtn", new Vector3(xl, y - 0.011f, 0), half, 0.022f, out _openText, () => builder.ToggleOpen());
-            // замер/разметку сделали снаружи — направляющие ушли на улицу: развернуть в том же проёме
-            PanelButton("FlipBtn", new Vector3(xr, y - 0.011f, 0), half, 0.022f, out var flipText, () => builder.FlipSide());
-            flipText.text = "Развернуть 180°";
-            y -= 0.022f + tileGap;
-
-            // Комплектация: окна и калитка (калитка — только если проём позволяет)
-            PanelButton("WindowsBtn", new Vector3(xl, y - optH * 0.5f, 0), half, optH, out _windowsText,
-                () => builder.SetOptions(!builder.windowsEnabled, builder.wicketEnabled));
-            PanelButton("WicketBtn", new Vector3(xr, y - optH * 0.5f, 0), half, optH, out _wicketText,
-                () => { if (builder.WicketAllowed) builder.SetOptions(builder.windowsEnabled, !builder.wicketEnabled); });
-            y -= optH;
-        }
-
-        if (measure != null) y = BuildMeasure(y, width);
+        // Строка статуса — на всех вкладках
+        y -= g * 1.5f;
+        float statusH = H * 0.42f;
+        _statusText = Text("Status", _menu, "", W, statusH).GetComponent<TextMeshPro>();
+        _statusText.color = ColDim;
+        _statusText.transform.localPosition = new Vector3(0, y - statusH * 0.5f, -0.001f);
+        y -= statusH;
 
         // Центрируем содержимое и подкладываем фон
-        float top = 0f, bottom = y;
-        float centerY = (top + bottom) * 0.5f;
+        float pad = 0.012f;
+        float centerY = y * 0.5f;
         foreach (Transform child in _menu) child.localPosition -= new Vector3(0, centerY, 0);
-        var bg = Quad("Background", _menu, backgroundMaterial, new Color(0.08f, 0.08f, 0.1f, 1f));
-        bg.localScale = new Vector3(width + 0.02f, top - bottom + 0.02f, 1f);
+        var bg = RoundedQuad("Background", _menu, W + pad * 2f, -y + pad * 2f, 0.014f, ColBg);
         bg.localPosition = new Vector3(0, 0, 0.002f);
+        _menuHalf = new Vector2(W * 0.5f + pad, -y * 0.5f + pad);
     }
 
     void UpdateHeader()
     {
         bool has = _selected >= 0 && _selected < _palette.Count;
         if (_headText != null)
-            _headText.text = $"Цвет: {(has ? _palette[_selected].label.Replace("\n", " ") : "—")}   ({(_paletteOpen ? "свернуть" : "выбрать")})";
+            _headText.text = "Цвет полотна: " + (has ? _palette[_selected].label.Replace("\n", " ") : "—");
         if (_swatch != null)
         {
             _swatch.gameObject.SetActive(has && _palette[_selected].tile != null);
@@ -426,116 +525,138 @@ public class GateColorPicker : MonoBehaviour
         }
     }
 
-    // Пересобрать меню (раскрыли/свернули палитру): положение и видимость сохраняются
+    // Пересобрать меню (другая вкладка): положение и видимость сохраняются
     void RebuildMenu()
     {
         Vector3 pos = _menu != null ? _menu.position : Vector3.zero;
         Quaternion rot = _menu != null ? _menu.rotation : Quaternion.identity;
+        string status = _statusText != null ? _statusText.text : "";
         if (_menu != null) Destroy(_menu.gameObject);
         _tiles.Clear();
         _buttons.Clear();
+        _hover = _pressed = null;
         _openText = _fitText = _windowsText = _wicketText = _markText = _headText = null;
-        _swatch = null;
+        _swatch = null; _highlight = null; _fieldHighlight = null; _widthBtn = _heightBtn = null;
         _widthText = _heightText = _statusText = null;
         BuildMenu();
         _menu.SetPositionAndRotation(pos, rot);
         _menu.gameObject.SetActive(_menuVisible);
         _pokeArmed = false; // тот же тычок не должен нажать кнопку на новом месте
+        SetStatus(status);
         RefreshMeasure();
         OnMarkerChanged();
         UpdateHighlight();
         UpdateButtonTexts();
     }
 
-    float BuildMeasure(float y, float width)
+    class Button
     {
-        y -= 0.008f;
-        Text("MeasureTitle", _menu, "Проём · DISTO", width, 0.013f).localPosition = new Vector3(0, y - 0.0065f, 0);
-        y -= 0.014f;
-        _statusText = Text("MeasureStatus", _menu, "", width, 0.009f).GetComponent<TextMeshPro>();
-        _statusText.color = new Color(0.75f, 0.75f, 0.8f);
-        _statusText.transform.localPosition = new Vector3(0, y - 0.0045f, 0);
-        y -= 0.012f;
-
-        float half = (width - tileGap) * 0.5f;
-        float bigH = 0.03f, smallH = 0.018f;
-        float xl = -width * 0.5f + half * 0.5f, xr = width * 0.5f - half * 0.5f;
-
-        _fieldHighlight = Quad("FieldHighlight", _menu, highlightMaterial, Color.white);
-        _fieldHighlight.localScale = new Vector3(half + 0.005f, bigH + 0.005f, 1f);
-
-        _widthBtn = PanelButton("WidthBtn", new Vector3(xl, y - bigH * 0.5f, 0), half, bigH, out _widthText,
-            () => measure.SetNext(DistoMeasure.Field.Width));
-        _heightBtn = PanelButton("HeightBtn", new Vector3(xr, y - bigH * 0.5f, 0), half, bigH, out _heightText,
-            () => measure.SetNext(DistoMeasure.Field.Height));
-        y -= bigH + tileGap;
-
-        PanelButton("ConnectBtn", new Vector3(xl, y - smallH * 0.5f, 0), half, smallH, out var connectText, () => measure.Connect());
-        connectText.text = "Подключить";
-        PanelButton("ResetBtn", new Vector3(xr, y - smallH * 0.5f, 0), half, smallH, out var resetText, () => measure.ResetValues());
-        resetText.text = "Сбросить";
-        y -= smallH + tileGap;
-
-        // Вписать адаптивные ворота в измеренный проём
-        if (builder != null)
-        {
-            PanelButton("FitBtn", new Vector3(0, y - smallH * 0.5f, 0), width, smallH, out _fitText, FitToOpening);
-            _fitText.text = "Вписать ворота в проём";
-            y -= smallH;
-        }
-        // Ручная разметка — для высоких проёмов, которые сканер Quest не видит целиком
-        if (marker != null)
-        {
-            y -= tileGap;
-            PanelButton("MarkBtn", new Vector3(xl, y - smallH * 0.5f, 0), half, smallH, out _markText, () => marker.Toggle());
-            PanelButton("ClearMarksBtn", new Vector3(xr, y - smallH * 0.5f, 0), half, smallH, out var clearText,
-                () => { marker.Cancel(); if (openings != null) openings.ClearManual(); SetStatus("ручная разметка удалена"); });
-            clearText.text = "Убрать разметку";
-            y -= smallH;
-        }
-        // Пересканировать комнату (новый объект, недосканированный верх проёма)
-        if (openings != null)
-        {
-            y -= tileGap;
-            PanelButton("ScanBtn", new Vector3(0, y - smallH * 0.5f, 0), width, smallH, out var scanText, () =>
-            {
-                if (openings.Scanning) return;
-                if (marker != null) marker.Cancel();
-                SetStatus("сканирование пространства…");
-                openings.RescanSpace(SetStatus);
-            });
-            scanText.text = "Сканировать пространство";
-            y -= smallH;
-        }
-        if (marker != null) OnMarkerChanged();
-        return y;
+        public Transform t;          // плашка/плитка (зона нажатия — вокруг её центра)
+        public Vector2 half;
+        public Action press;
+        public Material mat;         // свой материал плашки (подсветка); у плиток цвета — null
+        public Color baseColor;
+        public Transform label;
+        public bool tile;
+        public Vector3 restPos, labelRest;
+        public void SetColor(Color c) { if (mat != null) SetUnlitColor(mat, c); }
     }
 
-    Transform PanelButton(string name, Vector3 pos, float w, float h, out TextMeshPro label, Action press)
+    Button PanelButton(string name, Vector3 pos, float w, float h, out TextMeshPro label, Action press, float textFrac = 0.4f)
     {
-        var q = Quad(name, _menu, null, Color.white);
-        var m = TileMaterial(new Color(0.22f, 0.24f, 0.3f));
-        if (m != null) q.GetComponent<Renderer>().sharedMaterial = m;
+        var q = RoundedQuad(name, _menu, w, h, Mathf.Min(0.008f, h * 0.3f), ColButton);
         q.localPosition = pos;
-        q.localScale = new Vector3(w, h, 1f);
-        AddButton(q, w, h, press);
-        var t = Text(name + "Label", _menu, "", w * 0.92f, h * 0.85f);
+        var t = Text(name + "Label", _menu, "", w * 0.88f, h * textFrac);
         t.localPosition = pos + new Vector3(0, 0, -0.001f);
         label = t.GetComponent<TextMeshPro>();
-        return q;
+        return AddButton(q, w, h, press, t, false);
     }
 
-    void AddButton(Transform t, float w, float h, Action press) =>
-        _buttons.Add(new Button { t = t, half = new Vector2(w * 0.5f, h * 0.5f), press = press });
+    Button AddButton(Transform t, float w, float h, Action press, Transform label, bool tile)
+    {
+        var r = t.GetComponent<Renderer>();
+        var b = new Button
+        {
+            t = t, half = new Vector2(w * 0.5f, h * 0.5f), press = press, label = label, tile = tile,
+            mat = tile ? null : r.sharedMaterial, baseColor = ColButton,
+        };
+        _buttons.Add(b);
+        return b;
+    }
 
     void RefreshMeasure()
     {
-        if (measure == null || _widthText == null) return;
-        _widthText.text = "Ширина\n" + DistoMeasure.Format(measure.Width);
-        _heightText.text = "Высота\n" + DistoMeasure.Format(measure.Height);
-        _statusText.text = measure.Status;
-        var target = measure.Next == DistoMeasure.Field.Width ? _widthBtn : _heightBtn;
-        _fieldHighlight.localPosition = target.localPosition + new Vector3(0, 0, 0.001f);
+        if (measure == null) return;
+        if (_widthText != null) _widthText.text = "Ширина\n" + DistoMeasure.Format(measure.Width);
+        if (_heightText != null) _heightText.text = "Высота\n" + DistoMeasure.Format(measure.Height);
+        if (_statusText != null && !string.IsNullOrEmpty(measure.Status)) _statusText.text = measure.Status;
+        if (_fieldHighlight != null && _widthBtn != null && _heightBtn != null)
+        {
+            var target = measure.Next == DistoMeasure.Field.Width ? _widthBtn : _heightBtn;
+            _fieldHighlight.localPosition = target.localPosition + new Vector3(0, 0, 0.001f);
+        }
+    }
+
+    // Скруглённый прямоугольник (меш кэшируется по размеру) с неосвещённым материалом
+    static readonly Dictionary<Vector3, Mesh> _roundMeshes = new Dictionary<Vector3, Mesh>();
+
+    Transform RoundedQuad(string name, Transform parent, float w, float h, float r, Color color)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        go.AddComponent<MeshFilter>().sharedMesh = RoundedMesh(w, h, r);
+        var mr = go.AddComponent<MeshRenderer>();
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+        var m = TileMaterial(color);
+        if (m != null) mr.sharedMaterial = m;
+        return go.transform;
+    }
+
+    static Mesh RoundedMesh(float w, float h, float r, float uScale = 1f)
+    {
+        var key = new Vector3(Mathf.Round(w * 10000f), Mathf.Round(h * 10000f), Mathf.Round(r * 10000f) + (uScale < 1f ? 0.5f : 0f));
+        if (_roundMeshes.TryGetValue(key, out var cached) && cached != null) return cached;
+        r = Mathf.Min(r, w * 0.5f, h * 0.5f);
+        const int seg = 6;
+        var verts = new List<Vector3> { Vector3.zero };
+        var corners = new[] { new Vector2(w * 0.5f - r, h * 0.5f - r), new Vector2(-w * 0.5f + r, h * 0.5f - r),
+                              new Vector2(-w * 0.5f + r, -h * 0.5f + r), new Vector2(w * 0.5f - r, -h * 0.5f + r) };
+        for (int c = 0; c < 4; c++)
+            for (int i = 0; i <= seg; i++)
+            {
+                float a = (c * 90f + i * 90f / seg) * Mathf.Deg2Rad;
+                verts.Add(new Vector3(corners[c].x + Mathf.Cos(a) * r, corners[c].y + Mathf.Sin(a) * r, 0f));
+            }
+        var tris = new List<int>();
+        int n = verts.Count - 1;
+        for (int i = 1; i <= n; i++) { tris.Add(0); tris.Add(i % n + 1); tris.Add(i); } // лицом к -Z (к пользователю)
+        var uv = new List<Vector2>();
+        foreach (var v in verts) uv.Add(new Vector2((v.x / w + 0.5f) * uScale, v.y / h + 0.5f));
+        var mesh = new Mesh { name = "RoundRect" };
+        mesh.SetVertices(verts); mesh.SetTriangles(tris, 0); mesh.SetUVs(0, uv);
+        mesh.RecalculateNormals(); mesh.RecalculateBounds();
+        _roundMeshes[key] = mesh;
+        return mesh;
+    }
+
+    static void SetUnlitColor(Material m, Color c) => SetColor(m, c);
+
+    // Короткий щелчок для подтверждения нажатия
+    static AudioClip _clickClip;
+    static AudioClip ClickClip()
+    {
+        if (_clickClip != null) return _clickClip;
+        const int rate = 44100; int n = rate * 35 / 1000;
+        var data = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            float t = i / (float)rate;
+            data[i] = Mathf.Sin(2f * Mathf.PI * 2200f * t) * Mathf.Exp(-t * 160f) * 0.5f;
+        }
+        _clickClip = AudioClip.Create("MenuClick", n, 1, rate, false);
+        _clickClip.SetData(data, 0);
+        return _clickClip;
     }
 
     static Transform Quad(string name, Transform parent, Material mat, Color fallback)
@@ -546,30 +667,26 @@ public class GateColorPicker : MonoBehaviour
         q.SetParent(parent, false);
         if (mat == null)
         {
-            // Запасной вариант: шейдер может не попасть в сборку — тогда квад останется с материалом по умолчанию
             var shader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (shader != null)
-            {
-                mat = new Material(shader);
-                mat.SetColor("_BaseColor", fallback);
-            }
+            if (shader != null) { mat = new Material(shader); mat.SetColor("_BaseColor", fallback); }
         }
         if (mat != null) q.GetComponent<Renderer>().sharedMaterial = mat;
         return q;
     }
 
-    // Подписи меню: размер шрифта подбираем сами (одна строка по ширине/высоте кнопки) —
+    // Подписи меню: размер шрифта подбираем сами (одна строка по ширине/высоте) —
     // встроенный авторазмер TMP после смены текста застревал на мелком кегле
     readonly List<(TextMeshPro tmp, string fitted)> _labels = new List<(TextMeshPro, string)>();
-    const float LabelFontMax = 0.15f;
+    const float LabelFontMax = 0.3f;
 
     Transform Text(string name, Transform parent, string text, float w, float h)
     {
         var go = new GameObject(name, typeof(RectTransform));
         go.transform.SetParent(parent, false);
         var tmp = go.AddComponent<TextMeshPro>();
+        if (MenuFont != null) tmp.font = MenuFont;
         tmp.alignment = TextAlignmentOptions.Center;
-        tmp.color = Color.white;
+        tmp.color = ColText;
         tmp.enableAutoSizing = false;
         tmp.textWrappingMode = TextWrappingModes.NoWrap;
         tmp.rectTransform.sizeDelta = new Vector2(w, h);
@@ -605,14 +722,15 @@ public class GateColorPicker : MonoBehaviour
     {
         if (_highlight == null) return;
         bool on = _selected >= 0 && _selected < _tiles.Count;
-        _highlight.gameObject.SetActive(on && _menuVisible);
-        if (on) _highlight.localPosition = _tiles[_selected].localPosition + new Vector3(0, 0, 0.001f);
+        _highlight.gameObject.SetActive(on);
+        if (on) _highlight.localPosition = _tiles[_selected].localPosition + new Vector3(0, 0, 0.0008f);
     }
 
     void SetMenuVisible(bool v)
     {
         _menuVisible = v;
         if (_menu) _menu.gameObject.SetActive(v);
+        if (!v) { _hover = _pressed = null; _pinned = false; }
         if (v) UpdateHighlight();
         if (debugLogs) Debug.Log($"GateColorPicker: menu {(v ? "shown" : "hidden")}");
     }
@@ -621,24 +739,57 @@ public class GateColorPicker : MonoBehaviour
 
     void LateUpdate() => FitChangedLabels(); // тексты кнопок/статуса меняются из Update и событий
 
+    float _palmUpTime, _hideTime;
+    bool _pinned;
+
     void Update()
     {
         if (debugApply >= 0) { Apply(debugApply); debugApply = -1; }
-        if (debugTogglePalette && _menu != null) { debugTogglePalette = false; _paletteOpen = !_paletteOpen; RebuildMenu(); _menu.gameObject.SetActive(true); }
+        if (debugTab >= 0 && _menu != null)
+        {
+            _tab = (Tab)Mathf.Clamp(debugTab, 0, 3); debugTab = -1; RebuildMenu(); _menu.gameObject.SetActive(true);
+            var cam = Camera.main; // в редакторе — перед камерой, в стороне от моделей контроллеров
+            if (cam != null) _menu.SetPositionAndRotation(cam.transform.position + cam.transform.forward * 0.6f + Vector3.up * 0.5f,
+                Quaternion.LookRotation(cam.transform.forward, Vector3.up));
+        }
         if (_menu == null || _palette.Count == 0) return;
         if (!EnsureRefs()) { if (_menuVisible) SetMenuVisible(false); return; }
 
-        if (!_left.Tracked) { if (_menuVisible) SetMenuVisible(false); return; }
-
-        Vector3 wrist = _left.wrist.position;
-        Vector3 palm = (wrist + _left.middleKnuckle.position) * 0.5f;
+        bool leftOk = _left.Tracked;
+        Vector3 wrist = leftOk ? _left.wrist.position : Vector3.zero;
+        Vector3 palm = leftOk ? (wrist + _left.middleKnuckle.position) * 0.5f : Vector3.zero;
         // Нормаль из ладони левой руки (для правой знак был бы обратный)
-        Vector3 normal = Vector3.Cross(_left.indexKnuckle.position - wrist, _left.pinkyKnuckle.position - wrist).normalized;
-        float facing = Vector3.Dot(normal, (_head.position - palm).normalized);
+        Vector3 normal = leftOk ? Vector3.Cross(_left.indexKnuckle.position - wrist, _left.pinkyKnuckle.position - wrist).normalized : Vector3.zero;
+        float facing = leftOk ? Vector3.Dot(normal, (_head.position - palm).normalized) : -1f;
 
-        if (!_menuVisible && facing > showDot) SetMenuVisible(true);
-        else if (_menuVisible && facing < hideDot) SetMenuVisible(false);
-        if (!_menuVisible) return;
+        if (!_menuVisible)
+        {
+            // ладонь к лицу чуть дольше мгновения — меню появляется над ней (не мигает при случайном повороте руки)
+            _palmUpTime = facing > showDot ? _palmUpTime + Time.deltaTime : 0f;
+            if (_palmUpTime < 0.15f) return;
+            SetMenuVisible(true);
+            PlaceAtPalm(palm, normal, 1f);
+            _hideTime = 0f;
+        }
+
+        // Палец правой руки рядом с меню — меню замирает в воздухе, чтобы не дрожало вместе с ладонью
+        bool fingerNear = false;
+        if (_right.Tracked)
+        {
+            Vector3 p = _menu.InverseTransformPoint(_right.indexTip.position);
+            fingerNear = Mathf.Abs(p.x) < _menuHalf.x + 0.07f && Mathf.Abs(p.y) < _menuHalf.y + 0.07f && p.z > -0.18f && p.z < 0.08f;
+        }
+        bool palmUp = facing > hideDot;
+        if (fingerNear) _pinned = true;
+        else if (palmUp) _pinned = false;
+        if (!_pinned && palmUp) PlaceAtPalm(palm, normal, 1f - Mathf.Exp(-14f * Time.deltaTime));
+
+        // Убрать: ладонь опущена и палец далеко, или меню ушло из поля зрения
+        Vector3 toMenu = _menu.position - _head.position;
+        bool outOfView = Vector3.Angle(_head.forward, toMenu) > 65f || toMenu.magnitude > 1.2f;
+        bool idle = (!palmUp && !fingerNear) || outOfView;
+        _hideTime = idle ? _hideTime + Time.deltaTime : 0f;
+        if (_hideTime > 0.6f) { SetMenuVisible(false); return; }
 
         if (_fitText != null)
         {
@@ -646,48 +797,120 @@ public class GateColorPicker : MonoBehaviour
             _fitText.text = op != null ? $"Вписать в проём {op.WidthM * 1000:0}×{op.HeightM * 1000:0}" : "Вписать ворота в проём";
         }
         UpdateButtonTexts();
-
-        // Меню над ладонью, развёрнуто к голове, без крена
-        Vector3 pos = palm + normal * palmOffset;
-        _menu.position = pos;
-        Vector3 fwd = pos - _head.position; // +Z меню смотрит от пользователя
-        if (fwd.sqrMagnitude > 1e-6f) _menu.rotation = Quaternion.LookRotation(fwd, Vector3.up);
-
         Poke();
+    }
+
+    // Меню над ладонью, развёрнуто к голове, без крена (k — доля сглаживания)
+    void PlaceAtPalm(Vector3 palm, Vector3 normal, float k)
+    {
+        Vector3 pos = palm + normal * palmOffset + Vector3.up * (_menuHalf.y * 0.6f);
+        Vector3 fwd = pos - _head.position; // +Z меню смотрит от пользователя
+        fwd.y *= 0.5f;                      // меньше наклон — текст читается ровнее
+        Quaternion rot = fwd.sqrMagnitude > 1e-6f ? Quaternion.LookRotation(fwd, Vector3.up) : _menu.rotation;
+        _menu.SetPositionAndRotation(Vector3.Lerp(_menu.position, pos, k), Quaternion.Slerp(_menu.rotation, rot, k));
     }
 
     void UpdateButtonTexts()
     {
         if (_openText != null && builder != null)
-            _openText.text = builder.OpenOrOpening ? "Закрыть ворота" : "Открыть ворота";
+            _openText.text = builder.WicketOpen ? "Закройте калитку" : builder.OpenOrOpening ? "Закрыть ворота" : "Открыть ворота";
         if (_windowsText != null && builder != null)
             _windowsText.text = builder.windowsEnabled ? "Окна: есть" : "Окна: нет";
         if (_wicketText != null && builder != null)
         {
             _wicketText.text = !builder.WicketAllowed ? $"Калитка: от {builder.wicketMinOpeningWidth * 1000:0}×{builder.wicketMinOpeningHeight * 1000:0}"
                 : builder.wicketEnabled ? "Калитка: есть" : "Калитка: нет";
-            _wicketText.color = builder.WicketAllowed ? Color.white : new Color(0.6f, 0.6f, 0.65f);
+            _wicketText.color = builder.WicketAllowed ? ColText : ColDim;
         }
     }
 
+    // ---------- нажатие пальцем ----------
+    // Наведение: палец перед кнопкой (до hoverDistance) — она подсвечивается; из нескольких — ближайшая к центру.
+    // Нажатие: палец дошёл до плоскости кнопки — она «проваливается»; действие — когда палец отведён назад
+    // над той же кнопкой (соскользнул в сторону — отмена). Повторное нажатие — только после отвода пальца.
+
+    Button _hover, _pressed;
+    AudioSource _click;
+
     void Poke()
     {
-        if (!_right.Tracked) { _pokeArmed = true; return; }
-
+        if (!_right.Tracked) { SetHover(null); CancelPress(); _pokeArmed = true; return; }
         Vector3 p = _menu.InverseTransformPoint(_right.indexTip.position);
-        Button hit = null;
-        foreach (var b in _buttons)
+
+        if (_pressed != null)
         {
-            Vector3 t = b.t.localPosition;
-            if (Mathf.Abs(p.x - t.x) < b.half.x && Mathf.Abs(p.y - t.y) < b.half.y && Mathf.Abs(p.z) < pokeDepth) { hit = b; break; }
+            bool still = Mathf.Abs(p.x - _pressed.restPos.x) < _pressed.half.x * 1.25f && Mathf.Abs(p.y - _pressed.restPos.y) < _pressed.half.y * 1.25f;
+            if (!still || p.z > 0.12f) { CancelPress(); return; }
+            if (p.z < -releaseDistance)
+            {
+                var b = _pressed;
+                CancelPress();
+                _pokeArmed = false;
+                _nextPoke = Time.time + pokeCooldown;
+                if (_click) _click.Play();
+                b.press?.Invoke();
+            }
+            return;
         }
 
-        if (hit == null) { _pokeArmed = true; return; }
-        if (!_pokeArmed || Time.time < _nextPoke) return;
+        Button over = null; float best = float.MaxValue;
+        if (p.z > -hoverDistance && p.z < 0.04f)
+            foreach (var b in _buttons)
+            {
+                if (b.t == null) continue;
+                Vector3 t = b.t.localPosition;
+                float dx = Mathf.Abs(p.x - t.x) / b.half.x, dy = Mathf.Abs(p.y - t.y) / b.half.y;
+                if (dx >= 1f || dy >= 1f) continue;
+                float d = Mathf.Max(dx, dy);
+                if (d < best) { best = d; over = b; }
+            }
+        SetHover(over);
 
-        _pokeArmed = false;
-        _nextPoke = Time.time + pokeCooldown;
-        hit.press();
+        if (p.z < -releaseDistance) _pokeArmed = true; // палец перед меню — можно нажимать снова
+        if (over != null && _pokeArmed && p.z > -pressDepth && Time.time >= _nextPoke) StartPress(over);
+    }
+
+    void SetHover(Button b)
+    {
+        if (_hover == b) return;
+        if (_hover != null && _hover != _pressed) Visual(_hover, 0);
+        _hover = b;
+        if (_hover != null) Visual(_hover, 1);
+    }
+
+    void StartPress(Button b)
+    {
+        _pressed = b;
+        b.restPos = b.t.localPosition;
+        if (b.label) b.labelRest = b.label.localPosition;
+        Visual(b, 2);
+    }
+
+    void CancelPress()
+    {
+        if (_pressed == null) return;
+        var b = _pressed;
+        _pressed = null;
+        if (b.t) b.t.localPosition = b.restPos;
+        if (b.label) b.label.localPosition = b.labelRest;
+        Visual(b, b == _hover ? 1 : 0);
+    }
+
+    // 0 — обычная, 1 — под пальцем, 2 — нажата
+    void Visual(Button b, int state)
+    {
+        if (b.t == null) return;
+        if (b.tile)
+        {
+            float s = state == 0 ? 1f : 1.06f;
+            b.t.localScale = new Vector3(s, s, 1f);
+        }
+        else b.SetColor(state == 0 ? b.baseColor : state == 1 ? Color.Lerp(b.baseColor, ColHover, 0.8f) : ColAccent);
+        if (state == 2)
+        {
+            b.t.localPosition = b.restPos + new Vector3(0, 0, 0.004f);
+            if (b.label) b.label.localPosition = b.labelRest + new Vector3(0, 0, 0.004f);
+        }
     }
 
     // ---------- refs ----------

@@ -55,6 +55,7 @@ public class OpeningMarker : MonoBehaviour
         var go = new GameObject("MarkerLabel", typeof(RectTransform));
         go.transform.SetParent(transform, false);
         _label = go.AddComponent<TextMeshPro>();
+        if (GateColorPicker.MenuFont != null) _label.font = GateColorPicker.MenuFont;
         _label.alignment = TextAlignmentOptions.Center;
         _label.fontSize = 2f;
         _label.rectTransform.sizeDelta = new Vector2(1.2f, 0.2f);

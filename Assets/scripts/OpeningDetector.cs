@@ -188,6 +188,7 @@ public class OpeningDetector : MonoBehaviour
         go.transform.localPosition = new Vector3(r.center.x, r.yMax + 0.08f, 0);
         go.transform.localRotation = Quaternion.Euler(0, 180f, 0); // текст читается из комнаты
         var tmp = go.AddComponent<TextMeshPro>();
+        if (GateColorPicker.MenuFont != null) tmp.font = GateColorPicker.MenuFont;
         tmp.text = $"{o.WidthM * 1000:0} × {o.HeightM * 1000:0} мм";
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.enableAutoSizing = true; tmp.fontSizeMin = 0.05f; tmp.fontSizeMax = 1.2f;
