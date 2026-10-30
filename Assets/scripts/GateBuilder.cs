@@ -64,6 +64,9 @@ public partial class GateBuilder : MonoBehaviour
     public float trackOffset = 0.06f;
     public Vector2 trackProfile = new Vector2(0.07f, 0.04f);
 
+    [Tooltip("Длина ручки полотна (снаружи на нижней секции), м — стандартная 162 мм")]
+    public float gateHandleLength = 0.162f;
+
     [Header("Открывание кнопкой")]
     [Tooltip("Время полного открытия/закрытия, с")]
     public float fullOpenTime = 6f;
@@ -548,6 +551,13 @@ public partial class GateBuilder : MonoBehaviour
             else if (!stretchZ)
                 dz = Mathf.Abs(b.center.z) > 0.35f * W0 ? Mathf.Sign(b.center.z) * dW * 0.5f : b.center.z * (kW - 1f);
             if (!stretchY) dy = b.center.y * (kH - 1f);
+            if (p.name == "Handle" && b.size.z > 0.01f)
+            {
+                // ручка полотна — стандартная, длина gateHandleLength (в модели ~314 мм); середина остаётся на месте
+                float k = gateHandleLength / b.size.z, cz = b.center.z + dz;
+                Wrap(section, p, new Vector3(1f, 1f, k), new Vector3(0, dy, cz - b.center.z * k));
+                continue;
+            }
             Wrap(section, p, new Vector3(1f, stretchY ? kH : 1f, stretchZ ? kW : 1f), new Vector3(0, dy, dz));
         }
     }
