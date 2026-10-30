@@ -43,6 +43,7 @@ public class GateColorPicker : MonoBehaviour
         new Swatch("RAL 7004", "панель_серый RAL 7004", "#969992"),
         new Swatch("RAL 7016", "панель_антрацит RAL 7016", "#293133"),
         new Swatch("RAL 7016\nмороз", "RAL 7016 мороз", "#293133"),
+        new Swatch("RAL 9005", "панель_антрацит RAL 7016", "#0A0A0D"), // чёрный: своего материала в модели нет — цвет задаёт плитка
         new Swatch("RAL 8017", "панель_коричнево-красный RAL 8017", "#45322E"),
         new Swatch("RAL 8017\nмороз", "панель_коричнево-красный(мороз) RAL", "#45322E"),
         new Swatch("RAL 3005", "панель_бордовый RAL 3005", "#5E2129"),
@@ -142,6 +143,12 @@ public class GateColorPicker : MonoBehaviour
     void Start()
     {
         if (builder == null) builder = GetComponent<GateBuilder>();
+        // в сцене палитра сохранена списком — чёрный (добавлен позже) дописываем, если его там нет
+        if (!palette.Exists(sw => sw.label == "RAL 9005"))
+        {
+            int at = palette.FindIndex(sw => sw.label.Contains("7016") && sw.label.Contains("мороз"));
+            palette.Insert(at >= 0 ? at + 1 : palette.Count, new Swatch("RAL 9005", "панель_антрацит RAL 7016", "#0A0A0D"));
+        }
         CollectMaterials();
         if (builder != null) builder.Built += RefreshTargets;
         if (openings == null) openings = FindFirstObjectByType<OpeningDetector>();
