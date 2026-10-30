@@ -28061,8 +28061,9 @@ MonoBehaviour:
   backgroundMaterial: {fileID: 2100000, guid: 55f24d2e74cd61f42b6d8aa88e840368, type: 2}
   highlightMaterial: {fileID: 2100000, guid: e982969cac2564446a18e669d7b56039, type: 2}
   columns: 4
-  tileSize: 0.035
-  tileGap: 0.01
+  menuWidth: 0.22
+  buttonHeight: 0.032
+  buttonGap: 0.008
   palmOffset: 0.1
   showDot: 0.65
   hideDot: 0.4
@@ -28070,10 +28071,13 @@ MonoBehaviour:
   openings: {fileID: 0}
   measure: {fileID: 0}
   marker: {fileID: 0}
-  pokeDepth: 0.015
-  pokeCooldown: 0.4
+  hoverDistance: 0.05
+  pressDepth: 0.007
+  releaseDistance: 0.015
+  pokeCooldown: 0.25
   debugLogs: 0
   debugApply: -1
+  debugTab: -1
 --- !u!114 &7685820126626308161
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -28086,6 +28090,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3aaabfb5c4de76143a389542df9c7408, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GateBuilder
+  wicketHeight: 2
+  wicketMaxAngle: 100
+  debugWicketAngle: -1
   partsPrefab: {fileID: 8771091787928289351, guid: 7f9d769b55f10f6498ab07dd3001aa53, type: 3}
   modelOffset: {x: 0, y: -0.4233, z: 0}
   handleObject: {fileID: 0}

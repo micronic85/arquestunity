@@ -89,10 +89,10 @@ public class GateColorPicker : MonoBehaviour
     [Header("Poke")]
     [Tooltip("Палец ближе этого перед кнопкой — подсветка, м")]
     public float hoverDistance = 0.05f;
-    [Tooltip("Нажатие — палец дошёл до этого расстояния перед плоскостью кнопки, м")]
-    public float pressDepth = 0.004f;
-    [Tooltip("Действие — когда палец отведён назад на это расстояние, м")]
-    public float releaseDistance = 0.012f;
+    [Tooltip("Нажатие — кончик пальца ближе этого к плоскости кнопки, м (кость кончика — внутри подушечки)")]
+    public float pressDepth = 0.007f;
+    [Tooltip("Новое нажатие — после отвода пальца на это расстояние перед меню, м")]
+    public float releaseDistance = 0.015f;
     public float pokeCooldown = 0.4f;
 
     [Header("Debug")]
@@ -782,7 +782,7 @@ public class GateColorPicker : MonoBehaviour
         bool palmUp = facing > hideDot;
         if (fingerNear) _pinned = true;
         else if (palmUp) _pinned = false;
-        if (!_pinned && palmUp) PlaceAtPalm(palm, normal, 1f - Mathf.Exp(-14f * Time.deltaTime));
+        if (!_pinned && palmUp) PlaceAtPalm(palm, normal, 1f - Mathf.Exp(-22f * Time.deltaTime));
 
         // Убрать: ладонь опущена и палец далеко, или меню ушло из поля зрения
         Vector3 toMenu = _menu.position - _head.position;
@@ -826,8 +826,8 @@ public class GateColorPicker : MonoBehaviour
 
     // ---------- нажатие пальцем ----------
     // Наведение: палец перед кнопкой (до hoverDistance) — она подсвечивается; из нескольких — ближайшая к центру.
-    // Нажатие: палец дошёл до плоскости кнопки — она «проваливается»; действие — когда палец отведён назад
-    // над той же кнопкой (соскользнул в сторону — отмена). Повторное нажатие — только после отвода пальца.
+    // Нажатие: палец дошёл почти до плоскости кнопки (pressDepth) — действие сразу, кнопка «проваливается».
+    // Повторное нажатие — только после отвода пальца на releaseDistance перед меню.
 
     Button _hover, _pressed;
     AudioSource _click;
@@ -839,17 +839,9 @@ public class GateColorPicker : MonoBehaviour
 
         if (_pressed != null)
         {
+            // кнопка уже сработала — держим её «нажатой», пока палец не отведён или не ушёл в сторону
             bool still = Mathf.Abs(p.x - _pressed.restPos.x) < _pressed.half.x * 1.25f && Mathf.Abs(p.y - _pressed.restPos.y) < _pressed.half.y * 1.25f;
-            if (!still || p.z > 0.12f) { CancelPress(); return; }
-            if (p.z < -releaseDistance)
-            {
-                var b = _pressed;
-                CancelPress();
-                _pokeArmed = false;
-                _nextPoke = Time.time + pokeCooldown;
-                if (_click) _click.Play();
-                b.press?.Invoke();
-            }
+            if (!still || p.z < -releaseDistance || p.z > 0.12f) CancelPress();
             return;
         }
 
@@ -867,7 +859,15 @@ public class GateColorPicker : MonoBehaviour
         SetHover(over);
 
         if (p.z < -releaseDistance) _pokeArmed = true; // палец перед меню — можно нажимать снова
-        if (over != null && _pokeArmed && p.z > -pressDepth && Time.time >= _nextPoke) StartPress(over);
+        if (over != null && _pokeArmed && p.z > -pressDepth && Time.time >= _nextPoke)
+        {
+            // срабатывает сразу при касании (без ожидания отвода пальца) — отклик мгновенный
+            _pokeArmed = false;
+            _nextPoke = Time.time + pokeCooldown;
+            StartPress(over);
+            if (_click) _click.Play();
+            over.press?.Invoke(); // может пересобрать меню (вкладка) — тогда _pressed сбросится в RebuildMenu
+        }
     }
 
     void SetHover(Button b)
