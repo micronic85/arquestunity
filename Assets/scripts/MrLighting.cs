@@ -242,7 +242,8 @@ public class MrLighting : MonoBehaviour
 
     float FloorY()
     {
-        var room = Meta.XR.MRUtilityKit.MRUK.Instance != null ? Meta.XR.MRUtilityKit.MRUK.Instance.GetCurrentRoom() : null;
+        var mruk = Meta.XR.MRUtilityKit.MRUK.Instance;
+        var room = mruk != null && mruk.IsInitialized ? mruk.GetCurrentRoom() : null;
         if (room != null && room.FloorAnchors != null && room.FloorAnchors.Count > 0)
         {
             // пол, ближайший по высоте к низу ворот
@@ -260,8 +261,15 @@ public class MrLighting : MonoBehaviour
         return 0f;
     }
 
+    bool _quitting;
+    void OnApplicationQuit() => _quitting = true;
+
     void LateUpdate()
     {
+        if (_quitting) return;
+#if UNITY_EDITOR
+        if (!UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode) return;
+#endif
         if (_shadowPlane && shadowTarget)
         {
             var p = shadowTarget.position;
