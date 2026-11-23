@@ -299,7 +299,7 @@ public partial class GateBuilder : MonoBehaviour
     /// Поставить ворота в проём: bottomCenter — середина нижней кромки проёма (на полу),
     /// inward — нормаль стены в сторону помещения (туда уходят горизонтальные направляющие).
     /// </summary>
-    public void PlaceInOpening(Vector3 bottomCenter, Vector3 inward)
+    public void PlaceInOpening(Vector3 bottomCenter, Vector3 inward, bool lockScale = true)
     {
         inward.y = 0;
         if (inward.sqrMagnitude < 1e-4f) inward = transform.right;
@@ -307,6 +307,7 @@ public partial class GateBuilder : MonoBehaviour
         transform.localScale = Vector3.one; // примерка 1:1
         transform.rotation = Quaternion.LookRotation(Vector3.Cross(inward, Vector3.up), Vector3.up);
         transform.position = bottomCenter - transform.TransformVector(modelOffset);
+        if (lockScale) GetComponent<GateMover>()?.LockScaleForFit();
     }
 
     /// <summary>Развернуть ворота на 180° в том же проёме: направляющие уходят в другую сторону
@@ -316,9 +317,20 @@ public partial class GateBuilder : MonoBehaviour
         StopAnimation();
         Vector3 bottom = transform.position + transform.TransformVector(modelOffset);
         float s = transform.localScale.x;
-        PlaceInOpening(bottom, -transform.right);
+        PlaceInOpening(bottom, -transform.right, lockScale: false);
         transform.localScale = Vector3.one * s;
         transform.position = bottom - transform.TransformVector(modelOffset);
+    }
+
+    /// <summary>Собрать ворота под проём (м).</summary>
+    /// <summary>Точная примерка по размерам, включая DISTO без выбранного проёма.</summary>
+    public void Fit(float width, float height)
+    {
+        Vector3 bottom = transform.TransformPoint(modelOffset);
+        transform.localScale = Vector3.one;
+        transform.position = bottom - transform.TransformVector(modelOffset);
+        GetComponent<GateMover>()?.LockScaleForFit();
+        Build(width, height);
     }
 
     /// <summary>Собрать ворота под проём (м).</summary>

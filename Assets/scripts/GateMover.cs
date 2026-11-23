@@ -30,6 +30,10 @@ public class GateMover : MonoBehaviour
     public bool allowRotate = true;
     [Tooltip("Для примерки 1:1 масштаб лучше выключить")]
     public bool allowScale = true;
+    [Tooltip("После установки по замеру/в проём запретить масштабирование жестом: примерка остаётся 1:1")]
+    public bool lockScaleAfterFit = true;
+    public bool IsFittedToOpening { get; private set; }
+    public bool CanScale => allowScale && (!lockScaleAfterFit || !IsFittedToOpening);
     public float minScale = 0.1f;
     public float maxScale = 5f;
 
@@ -168,7 +172,7 @@ public class GateMover : MonoBehaviour
         if (!Tracked(leftHand, _l) || !Tracked(rightHand, _r)) return Mode.None;
         if (allowMove || allowRotate)
             if (IsFist(_l) && IsFist(_r)) return Mode.Move;
-        if (allowScale)
+        if (CanScale)
             if (IsPointing(_l) && IsPointing(_r)) return Mode.Scale;
         return Mode.None;
     }
@@ -232,7 +236,7 @@ public class GateMover : MonoBehaviour
                 transform.RotateAround(pivot, Vector3.up, dYaw);
             }
         }
-        else if (_mode == Mode.Scale && _prevDist > 0.01f)
+        else if (_mode == Mode.Scale && CanScale && _prevDist > 0.01f)
         {
             float cur = transform.localScale.x;
             float next = Mathf.Clamp(cur * (dist / _prevDist), minScale, maxScale);
@@ -275,6 +279,20 @@ public class GateMover : MonoBehaviour
     /// <summary>Сбросить масштаб в 1:1 (можно повесить на кнопку/событие).</summary>
     public void ResetScale()
     {
+        var builder = GetComponent<GateBuilder>();
+        Vector3 offset = builder != null ? builder.modelOffset : Vector3.zero;
+        Vector3 bottom = transform.TransformPoint(offset);
         transform.localScale = Vector3.one;
+        transform.position = bottom - transform.TransformVector(offset);
+    }
+
+    /// <summary>Зафиксировать масштаб после точной примерки. Перенос и поворот остаются доступны.</summary>
+    public void LockScaleForFit()
+    {
+        ResetScale();
+        IsFittedToOpening = true;
+        SetMode(Mode.None);
+        _candidate = Mode.None;
+        _gestureTimer = 0f;
     }
 }

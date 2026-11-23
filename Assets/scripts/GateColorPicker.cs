@@ -55,6 +55,8 @@ public class GateColorPicker : MonoBehaviour
     };
     [Tooltip("Материал лицевой стороны полотна, который заменяем")]
     public string targetMaterialName = "базовый цвет";
+    [Tooltip("Материалы палитры без держателя Sphere и геометрии прежней модели")]
+    public List<Material> paletteMaterials = new List<Material>();
 
     [Header("Menu")]
     [Tooltip("Материал фона меню (URP Unlit). Пусто — создаётся в рантайме, если шейдер есть в сборке")]
@@ -167,6 +169,8 @@ public class GateColorPicker : MonoBehaviour
     {
         var byName = new Dictionary<string, Material>();
         Material baseMat = null;
+        foreach (var mat in paletteMaterials)
+            if (mat != null) byName[CleanName(mat.name)] = mat;
         foreach (var r in GetComponentsInChildren<Renderer>(true))
         {
             var mats = r.sharedMaterials;
@@ -178,7 +182,11 @@ public class GateColorPicker : MonoBehaviour
                 if (n == targetMaterialName) { _targets.Add((r, i)); if (baseMat == null) baseMat = mats[i]; }
             }
         }
-        if (_targets.Count == 0) { Debug.LogWarning($"GateColorPicker: не найдено рендереров с материалом '{targetMaterialName}'", this); return; }
+        if (_targets.Count == 0 && (builder == null || builder.Root == null))
+        {
+            Debug.LogWarning($"GateColorPicker: не найдено панелей ворот для палитры", this);
+            return;
+        }
 
         foreach (var sw in palette)
         {
@@ -196,7 +204,7 @@ public class GateColorPicker : MonoBehaviour
                 textured = sw.tileUsesTexture,
             });
         }
-        if (debugLogs) Debug.Log($"GateColorPicker: palette={_palette.Count} targets={_targets.Count} base={baseMat.shader.name}");
+        if (debugLogs) Debug.Log($"GateColorPicker: palette={_palette.Count} targets={_targets.Count} base={(baseMat != null ? baseMat.shader.name : "adaptive")}");
     }
 
     /// <summary>Ворота пересобраны — заново найти панели полотна и вернуть выбранный цвет.</summary>
@@ -282,7 +290,7 @@ public class GateColorPicker : MonoBehaviour
         float w = measured ? measure.Width.Value / 1000f : op.WidthM;
         float h = measured ? measure.Height.Value / 1000f : op.HeightM;
         if (op != null) builder.PlaceInOpening(op.BottomCenter, op.Inward);
-        builder.Build(w, h);
+        builder.Fit(w, h);
         SetStatus($"ворота {w * 1000:0} × {h * 1000:0} мм " + (measured ? "(по DISTO)" : "(по разметке)") + (op != null ? " в проёме" : ""));
     }
 
