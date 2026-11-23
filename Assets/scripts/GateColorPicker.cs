@@ -117,7 +117,7 @@ public class GateColorPicker : MonoBehaviour
     readonly HandRef _left = new HandRef();
     readonly HandRef _right = new HandRef();
 
-    class Entry { public string label; public Material gate; public Material tile; public Color color; public bool textured; public Material adaptive; }
+    class Entry { public string label; public Material gate; public Material tile; public Color color; public bool textured; public Material adaptive; public Material roller; }
     readonly List<Entry> _palette = new List<Entry>();
     readonly List<(Renderer r, int slot)> _targets = new List<(Renderer, int)>();
 
@@ -137,6 +137,8 @@ public class GateColorPicker : MonoBehaviour
     TextMeshPro _widthText, _heightText, _statusText, _openText, _fitText, _windowsText, _wicketText, _markText;
     TextMeshPro _placementText;
     GateMover _mover;
+    TextMeshPro _sectionalTypeText, _rollerTypeText, _rollerClearText;
+    GateBuilder.GateKind _menuGateKind;
     Transform _widthBtn, _heightBtn, _fieldHighlight;
 
     bool _menuVisible;
@@ -233,6 +235,7 @@ public class GateColorPicker : MonoBehaviour
         // До выбора цвета — белые панели (RAL 9003) с гофрами, а не серый материал модели
         if (_selected < 0 && _palette.Count > 0) _selected = 0;
         if (_selected >= 0) Apply(_selected);
+        if (_menu != null && builder != null && _menuGateKind != builder.gateKind) RebuildMenu();
         if (debugLogs) Debug.Log($"GateColorPicker: targets refreshed = {_targets.Count}");
     }
 
@@ -271,10 +274,30 @@ public class GateColorPicker : MonoBehaviour
         return m;
     }
 
+    Material RollerMaterial(Entry e)
+    {
+        if (e.roller != null) return e.roller;
+        var baseMat = AdaptiveMaterial(e);
+        if (baseMat == null) return GateMaterials.Get(e.gate);
+        e.roller = new Material(baseMat) { name = e.label + " (roller)" };
+        // Do not reuse AO/normal/metallic maps baked for the sectional panels' UV atlas.
+        e.roller.SetTexture("_MRMap", null);
+        e.roller.SetTexture("_BumpMap", null);
+        e.roller.SetTexture("_OcclusionMap", null);
+        e.roller.SetFloat("_BumpScale", 0f);
+        e.roller.SetFloat("_OcclusionStrength", 0f);
+        e.roller.SetFloat("_Metallic", .25f);
+        e.roller.SetFloat("_Roughness", .45f);
+        e.roller.SetFloat("_Ribs", 0f); // the roller profile is actual geometry
+        e.roller.SetFloat("_Stucco", e.label.Contains("мороз") ? .25f : .025f);
+        e.roller.enableInstancing = true;
+        return e.roller;
+    }
+
     static bool IsOuterSkin(Transform t, Transform stop)
     {
         for (; t != null && t != stop; t = t.parent)
-            if (t.name.StartsWith("панель_")) return true;
+            if (t.name.StartsWith("панель_") || t.name.StartsWith("RollerPaint_")) return true;
         return false;
     }
 
@@ -332,7 +355,7 @@ public class GateColorPicker : MonoBehaviour
     {
         if (index < 0 || index >= _palette.Count) return;
         var mat = GateMaterials.Get(_palette[index].gate);
-        var adaptiveMat = AdaptiveMaterial(_palette[index]);
+        var adaptiveMat = builder != null && builder.IsRoller ? RollerMaterial(_palette[index]) : AdaptiveMaterial(_palette[index]);
         foreach (var (r, slot) in _targets)
         {
             var mats = r.sharedMaterials;
@@ -403,17 +426,36 @@ public class GateColorPicker : MonoBehaviour
             case Tab.Gate:
                 if (builder != null)
                 {
+                    _menuGateKind = builder.gateKind;
+                    PanelButton("SectionalTypeBtn", new Vector3(xl, y - H * .5f, 0), half, H,
+                        out _sectionalTypeText, () => SelectGateType(GateBuilder.GateKind.Sectional));
+                    PanelButton("RollerTypeBtn", new Vector3(xr, y - H * .5f, 0), half, H,
+                        out _rollerTypeText, () => SelectGateType(GateBuilder.GateKind.Roller));
+                    _sectionalTypeText.text = "Секционные";
+                    _rollerTypeText.text = "Роллетные";
+                    y -= H + g;
                     PanelButton("OpenBtn", new Vector3(xl, y - H * 0.5f, 0), half, H, out _openText, () => builder.ToggleOpen());
                     // замер/разметку сделали снаружи — направляющие ушли на улицу: развернуть в том же проёме
                     PanelButton("FlipBtn", new Vector3(xr, y - H * 0.5f, 0), half, H, out var flipText, () => builder.FlipSide());
                     flipText.text = "Развернуть 180°";
                     y -= H + g;
-                    // Комплектация: окна и калитка (калитка — только если проём позволяет)
+                    // Sectional options are retained when switching to the roller type.
+                    if (!builder.IsRoller)
+                    {
                     PanelButton("WindowsBtn", new Vector3(xl, y - H * 0.5f, 0), half, H, out _windowsText,
                         () => builder.SetOptions(!builder.windowsEnabled, builder.wicketEnabled));
                     PanelButton("WicketBtn", new Vector3(xr, y - H * 0.5f, 0), half, H, out _wicketText,
                         () => { if (builder.WicketAllowed) builder.SetOptions(builder.windowsEnabled, !builder.wicketEnabled); });
                     y -= H;
+                    }
+                    else
+                    {
+                        var sizeLabel = Text("RollerClearance", _menu,
+                            $"Под коробом {builder.RollerClearHeight * 1000:0} мм", W, H * .60f);
+                        _rollerClearText = sizeLabel.GetComponent<TextMeshPro>();
+                        sizeLabel.localPosition = new Vector3(0, y - H * .4f, -.001f);
+                        y -= H * .8f;
+                    }
                     if (_mover != null)
                     {
                         y -= g;
@@ -562,6 +604,7 @@ public class GateColorPicker : MonoBehaviour
         _buttons.Clear();
         _hover = _pressed = null;
         _openText = _fitText = _windowsText = _wicketText = _markText = _headText = _placementText = null;
+        _sectionalTypeText = _rollerTypeText = _rollerClearText = null;
         _swatch = null; _highlight = null; _fieldHighlight = null; _widthBtn = _heightBtn = null;
         _widthText = _heightText = _statusText = null;
         BuildMenu();
@@ -836,6 +879,14 @@ public class GateColorPicker : MonoBehaviour
         _menu.SetPositionAndRotation(Vector3.Lerp(_menu.position, pos, k), Quaternion.Slerp(_menu.rotation, rot, k));
     }
 
+    void SelectGateType(GateBuilder.GateKind kind)
+    {
+        if (builder == null) return;
+        builder.SetGateType(kind);
+        SetStatus(kind == GateBuilder.GateKind.Roller ? "Роллетные ворота" : "Секционные ворота");
+        UpdateButtonTexts();
+    }
+
     void TogglePlacementLock()
     {
         if (_mover == null) return;
@@ -846,6 +897,12 @@ public class GateColorPicker : MonoBehaviour
 
     void UpdateButtonTexts()
     {
+        if (_rollerClearText != null && builder != null)
+            _rollerClearText.text = $"Под коробом {builder.RollerClearHeight * 1000:0} мм";
+        if (_sectionalTypeText != null && builder != null)
+            _sectionalTypeText.color = !builder.IsRoller ? ColAccent : ColDim;
+        if (_rollerTypeText != null && builder != null)
+            _rollerTypeText.color = builder.IsRoller ? ColAccent : ColDim;
         if (_placementText != null && _mover != null)
             _placementText.text = _mover.IsPlacementLocked ? "Разблокировать положение" : "Зафиксировать положение";
         if (_openText != null && builder != null)
@@ -994,5 +1051,10 @@ public class GateColorPicker : MonoBehaviour
         if (measure != null) measure.Changed -= RefreshMeasure;
         if (marker != null) marker.Changed -= OnMarkerChanged;
         if (_menu != null) Destroy(_menu.gameObject);
+        foreach (var entry in _palette)
+        {
+            if (entry.adaptive != null) Destroy(entry.adaptive);
+            if (entry.roller != null) Destroy(entry.roller);
+        }
     }
 }

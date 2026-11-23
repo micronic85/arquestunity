@@ -38,7 +38,7 @@ public partial class GateBuilder : MonoBehaviour
     public float wicketMinOpeningWidth = 2.0f;
 
     /// <summary>Проём позволяет калитку.</summary>
-    public bool WicketAllowed => openingHeight >= wicketMinOpeningHeight - 1e-4f && openingWidth >= wicketMinOpeningWidth - 1e-4f;
+    public bool WicketAllowed => !IsRoller && openingHeight >= wicketMinOpeningHeight - 1e-4f && openingWidth >= wicketMinOpeningWidth - 1e-4f;
     /// <summary>Калитка сейчас есть в воротах.</summary>
     public bool HasWicket => wicketEnabled && WicketAllowed;
 
@@ -101,10 +101,13 @@ public partial class GateBuilder : MonoBehaviour
     Transform _tmplHardware;
     float _lv, _lh, _tMax;
 
+    Quaternion _handleRestRotation = Quaternion.identity;
+
     void Awake()
     {
         if (partsPrefab == null) { Debug.LogError("GateBuilder: не задан partsPrefab", this); enabled = false; return; }
         if (handleObject == null) handleObject = transform.Find("ruchka"); // ручка прежней модели с GrabInteractable
+        if (handleObject) _handleRestRotation = Quaternion.Inverse(transform.rotation) * handleObject.rotation;
         if (hideLegacyModel) HideLegacy();
 
         var t = Instantiate(partsPrefab, transform).transform;
@@ -322,7 +325,6 @@ public partial class GateBuilder : MonoBehaviour
         transform.position = bottom - transform.TransformVector(modelOffset);
     }
 
-    /// <summary>Собрать ворота под проём (м).</summary>
     /// <summary>Точная примерка по размерам, включая DISTO без выбранного проёма.</summary>
     public void Fit(float width, float height)
     {
@@ -392,10 +394,27 @@ public partial class GateBuilder : MonoBehaviour
     public void Rebuild()
     {
         if (_templates == null) return;
+        ReleaseRollerMeshes();
         _handleAttached = false;
-        if (handleObject != null) handleObject.SetParent(transform, true);
+        if (handleObject != null)
+        {
+            handleObject.SetParent(transform, true);
+            handleObject.localRotation = _handleRestRotation;
+        }
         if (_root != null) { _root.gameObject.SetActive(false); Destroy(_root.gameObject); }
         _sections.Clear();
+        _wicketPivots.Clear();
+        _wicketGrabs.Clear();
+        _wicketGrabPoses.Clear();
+        _wicketGrab = null;
+        WicketAngle = 0;
+        _lastDebugWicket = -2f;
+        if (IsRoller)
+        {
+            BuildRollerGate();
+            Built?.Invoke();
+            return;
+        }
 
         CurtainWidth = Mathf.Max(1.5f, openingWidth + widthOverlap);
         CurtainHeight = Mathf.Max(1.5f, openingHeight + heightOverlap);
@@ -780,6 +799,7 @@ public partial class GateBuilder : MonoBehaviour
 
     void ApplyPose()
     {
+        if (IsRoller) { ApplyRollerPose(); return; }
         if (_sections.Count == 0) return;
         float s = Progress * _tMax;
         for (int i = 0; i < _sections.Count; i++)

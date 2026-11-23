@@ -178,8 +178,11 @@ Shader "VorotaKraft/GateLitOccluded"
                 float3 tangentWS = normalize(input.tangentWS.xyz);
                 if (!isFront) { normalWS = -normalWS; }
                 float3 bitangentWS = cross(normalWS, tangentWS) * (input.tangentWS.w > 0 ? 1.0 : -1.0);
-                half3 normalTS = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv), _BumpScale);
-                normalWS = normalize(TransformTangentToWorld(normalTS, half3x3(tangentWS, bitangentWS, normalWS)));
+                if (abs(_BumpScale) > 0.0001)
+                {
+                    half3 normalTS = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv), _BumpScale);
+                    normalWS = normalize(TransformTangentToWorld(normalTS, half3x3(tangentWS, bitangentWS, normalWS)));
+                }
 
                 // Сэндвич-панель: горизонтальные гофры + мелкая «штукатурка» (stucco) — процедурно, без UV
                 float3 upWS = normalize(TransformObjectToWorldDir(float3(0, 1, 0)));
