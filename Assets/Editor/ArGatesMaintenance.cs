@@ -59,7 +59,7 @@ public static class ArGatesMaintenance
         controller.builder = builder;
         controller.gateAnimator = null;
         var mover = root.GetComponent<GateMover>();
-        if (mover) { mover.gateController = controller; mover.lockScaleAfterFit = true; }
+        if (mover) { mover.gateController = controller; mover.lockPlacementAfterFit = true; }
 
         if (!AssetDatabase.IsValidFolder(HandleFolder))
             AssetDatabase.CreateFolder("Assets/Models", "GateInteraction");
@@ -130,17 +130,43 @@ public static class ArGatesMaintenance
         try
         {
             mover.allowScale = true;
-            Check(mover.CanScale, "Free preview should allow scaling before fitting.");
+            mover.SetPlacementLocked(false);
+            Check(mover.CanMove && mover.CanRotate && mover.CanScale, "Free preview should allow gestures before fitting.");
             builder.transform.localScale = Vector3.one * 1.6f;
             Vector3 bottom = builder.transform.TransformPoint(builder.modelOffset);
             builder.Fit(3.5f, 2.65f);
             Check((builder.transform.localScale - Vector3.one).sqrMagnitude < 1e-8f, "DISTO fit did not reset scale.");
-            Check(!mover.CanScale && mover.IsFittedToOpening, "Scale gesture is not locked after fitting.");
+            Check(mover.IsPlacementLocked && !mover.CanMove && !mover.CanRotate && !mover.CanScale,
+                "Placement gestures are not all locked after fitting.");
+            var frozenPosition = builder.transform.position;
+            var frozenRotation = builder.transform.rotation;
+            var frozenScale = builder.transform.localScale;
+            var modeField = typeof(GateMover).GetField("_mode", BindingFlags.NonPublic | BindingFlags.Instance);
+            var apply = typeof(GateMover).GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
+            foreach (string mode in new[] { "Move", "Scale" })
+            {
+                modeField.SetValue(mover, Enum.Parse(modeField.FieldType, mode));
+                apply.Invoke(mover, null);
+                Check(builder.transform.position == frozenPosition && builder.transform.rotation == frozenRotation &&
+                    builder.transform.localScale == frozenScale, "Locked gesture changed the transform.");
+            }
+            var toggle = typeof(GateColorPicker).GetMethod("TogglePlacementLock", BindingFlags.NonPublic | BindingFlags.Instance);
+            var label = (TMPro.TextMeshPro)typeof(GateColorPicker).GetField("_placementText", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(picker);
+            Check(label != null, "Placement lock button is absent from the Gate tab.");
+            toggle.Invoke(picker, null);
+            Check(!mover.IsPlacementLocked && mover.CanMove && mover.CanRotate && mover.CanScale,
+                "Menu button did not unlock all gestures.");
+            Check(label.text == "Зафиксировать положение", "Unlocked button label is incorrect.");
+            Check(modeField.GetValue(mover).ToString() == "None", "Unlock retained a stale gesture.");
+            toggle.Invoke(picker, null);
+            Check(mover.IsPlacementLocked && label.text == "Разблокировать положение", "Menu button did not relock.");
+            Check(builder.transform.position == frozenPosition && builder.transform.rotation == frozenRotation &&
+                builder.transform.localScale == frozenScale, "Lock toggle changed placement.");
             Check(Vector3.Distance(bottom, builder.transform.TransformPoint(builder.modelOffset)) < .0001f, "Reset moved the gate bottom.");
             builder.PlaceInOpening(new Vector3(2, 0, 3), Vector3.back);
             Check(Vector3.Distance(builder.transform.TransformPoint(builder.modelOffset), new Vector3(2,0,3)) < .0001f, "Wrong opening origin.");
             builder.FlipSide(); builder.FlipSide();
-            Check(Vector3.Distance(builder.transform.TransformPoint(builder.modelOffset), new Vector3(2,0,3)) < .0001f && !mover.CanScale, "Flip changed fitting origin/lock.");
+            Check(Vector3.Distance(builder.transform.TransformPoint(builder.modelOffset), new Vector3(2,0,3)) < .0001f && mover.IsPlacementLocked && !mover.CanMove && !mover.CanRotate && !mover.CanScale, "Flip changed fitting origin/lock.");
 
             foreach (var size in new[] { new Vector2(3.5f,2.65f), new Vector2(2f,2f), new Vector2(5f,4.5f) })
             {
@@ -167,8 +193,9 @@ public static class ArGatesMaintenance
             builder.SetWicketAngle(0);
             builder.SetOptions(false,false);
             Check(!builder.HasWicket, "Wicket option did not disable.");
+            Check(mover.IsPlacementLocked, "Rebuild lost placement lock.");
             Check(builder.handleObject != null, "Handle lost during rebuild.");
-            string report = $"Play Mode verification passed: {checks} checks. Sizes 3500x2650, 2000x2000, 5000x4500; closed/half/open; palette; handle; fitting scale; flip; wicket interlock.\n";
+            string report = $"Play Mode verification passed: {checks} checks. Sizes 3500x2650, 2000x2000, 5000x4500; closed/half/open; palette; handle; full placement lock; menu unlock/relock; flip; wicket interlock.\n";
             File.AppendAllText(ReportPath, report);
             Debug.Log(report);
         }

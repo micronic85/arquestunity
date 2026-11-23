@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// Манипуляция воротами двумя руками (hand tracking).
@@ -30,10 +31,14 @@ public class GateMover : MonoBehaviour
     public bool allowRotate = true;
     [Tooltip("Для примерки 1:1 масштаб лучше выключить")]
     public bool allowScale = true;
-    [Tooltip("После установки по замеру/в проём запретить масштабирование жестом: примерка остаётся 1:1")]
-    public bool lockScaleAfterFit = true;
+    [FormerlySerializedAs("lockScaleAfterFit")]
+    [Tooltip("После примерки заблокировать перенос, поворот и масштаб жестами до явной разблокировки в меню")]
+    public bool lockPlacementAfterFit = true;
     public bool IsFittedToOpening { get; private set; }
-    public bool CanScale => allowScale && (!lockScaleAfterFit || !IsFittedToOpening);
+    public bool IsPlacementLocked { get; private set; }
+    public bool CanMove => allowMove && !IsPlacementLocked;
+    public bool CanRotate => allowRotate && !IsPlacementLocked;
+    public bool CanScale => allowScale && !IsPlacementLocked;
     public float minScale = 0.1f;
     public float maxScale = 5f;
 
@@ -81,6 +86,7 @@ public class GateMover : MonoBehaviour
 
     void Update()
     {
+        if (IsPlacementLocked) { ResetGesture(); return; }
         bool hands = EnsureHands();
         bool bonesL = hands && EnsureBones(leftHand, _l);
         bool bonesR = hands && EnsureBones(rightHand, _r);
@@ -169,8 +175,9 @@ public class GateMover : MonoBehaviour
 
     Mode DetectGesture()
     {
+        if (IsPlacementLocked) return Mode.None;
         if (!Tracked(leftHand, _l) || !Tracked(rightHand, _r)) return Mode.None;
-        if (allowMove || allowRotate)
+        if (CanMove || CanRotate)
             if (IsFist(_l) && IsFist(_r)) return Mode.Move;
         if (CanScale)
             if (IsPointing(_l) && IsPointing(_r)) return Mode.Scale;
@@ -216,6 +223,7 @@ public class GateMover : MonoBehaviour
 
     void Apply()
     {
+        if (IsPlacementLocked) { ResetGesture(); return; }
         SampleHands(out var l, out var r);
         Vector3 mid = (l + r) * 0.5f;
         float dist = Vector3.Distance(l, r);
@@ -223,13 +231,13 @@ public class GateMover : MonoBehaviour
 
         if (_mode == Mode.Move)
         {
-            if (allowMove)
+            if (CanMove)
             {
                 Vector3 delta = mid - _prevMid;
                 if (!allowVertical) delta.y = 0f;
                 transform.position += delta;
             }
-            if (allowRotate)
+            if (CanRotate)
             {
                 float dYaw = Mathf.DeltaAngle(_prevYaw, yaw);
                 Vector3 pivot = new Vector3(mid.x, transform.position.y, mid.z);
@@ -286,13 +294,26 @@ public class GateMover : MonoBehaviour
         transform.position = bottom - transform.TransformVector(offset);
     }
 
-    /// <summary>Зафиксировать масштаб после точной примерки. Перенос и поворот остаются доступны.</summary>
-    public void LockScaleForFit()
+    /// <summary>После точной примерки масштаб 1:1, жесты полностью заблокированы.</summary>
+    public void LockPlacementForFit()
     {
         ResetScale();
         IsFittedToOpening = true;
+        SetPlacementLocked(lockPlacementAfterFit);
+    }
+
+    /// <summary>Явная фиксация/разблокировка из меню, без изменения текущего положения.</summary>
+    public void SetPlacementLocked(bool locked)
+    {
+        IsPlacementLocked = locked;
+        ResetGesture();
+    }
+
+    void ResetGesture()
+    {
         SetMode(Mode.None);
         _candidate = Mode.None;
         _gestureTimer = 0f;
+        _smoothInit = false;
     }
 }

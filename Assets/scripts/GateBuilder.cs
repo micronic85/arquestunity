@@ -307,7 +307,7 @@ public partial class GateBuilder : MonoBehaviour
         transform.localScale = Vector3.one; // примерка 1:1
         transform.rotation = Quaternion.LookRotation(Vector3.Cross(inward, Vector3.up), Vector3.up);
         transform.position = bottomCenter - transform.TransformVector(modelOffset);
-        if (lockScale) GetComponent<GateMover>()?.LockScaleForFit();
+        if (lockScale) GetComponent<GateMover>()?.LockPlacementForFit();
     }
 
     /// <summary>Развернуть ворота на 180° в том же проёме: направляющие уходят в другую сторону
@@ -329,7 +329,7 @@ public partial class GateBuilder : MonoBehaviour
         Vector3 bottom = transform.TransformPoint(modelOffset);
         transform.localScale = Vector3.one;
         transform.position = bottom - transform.TransformVector(modelOffset);
-        GetComponent<GateMover>()?.LockScaleForFit();
+        GetComponent<GateMover>()?.LockPlacementForFit();
         Build(width, height);
     }
 

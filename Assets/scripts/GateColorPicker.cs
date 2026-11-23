@@ -135,6 +135,8 @@ public class GateColorPicker : MonoBehaviour
 
     // Блок замера
     TextMeshPro _widthText, _heightText, _statusText, _openText, _fitText, _windowsText, _wicketText, _markText;
+    TextMeshPro _placementText;
+    GateMover _mover;
     Transform _widthBtn, _heightBtn, _fieldHighlight;
 
     bool _menuVisible;
@@ -145,6 +147,7 @@ public class GateColorPicker : MonoBehaviour
     void Start()
     {
         if (builder == null) builder = GetComponent<GateBuilder>();
+        _mover = builder != null ? builder.GetComponent<GateMover>() : GetComponent<GateMover>();
         // в сцене палитра сохранена списком — чёрный (добавлен позже) дописываем, если его там нет
         if (!palette.Exists(sw => sw.label == "RAL 9005"))
         {
@@ -411,6 +414,14 @@ public class GateColorPicker : MonoBehaviour
                     PanelButton("WicketBtn", new Vector3(xr, y - H * 0.5f, 0), half, H, out _wicketText,
                         () => { if (builder.WicketAllowed) builder.SetOptions(builder.windowsEnabled, !builder.wicketEnabled); });
                     y -= H;
+                    if (_mover != null)
+                    {
+                        y -= g;
+                        PanelButton("PlacementLockBtn", new Vector3(0, y - H * .5f, 0), W, H,
+                            out _placementText, TogglePlacementLock);
+                        _placementText.text = _mover.IsPlacementLocked ? "Разблокировать положение" : "Зафиксировать положение";
+                        y -= H;
+                    }
                 }
                 break;
 
@@ -550,7 +561,7 @@ public class GateColorPicker : MonoBehaviour
         _tiles.Clear();
         _buttons.Clear();
         _hover = _pressed = null;
-        _openText = _fitText = _windowsText = _wicketText = _markText = _headText = null;
+        _openText = _fitText = _windowsText = _wicketText = _markText = _headText = _placementText = null;
         _swatch = null; _highlight = null; _fieldHighlight = null; _widthBtn = _heightBtn = null;
         _widthText = _heightText = _statusText = null;
         BuildMenu();
@@ -825,8 +836,18 @@ public class GateColorPicker : MonoBehaviour
         _menu.SetPositionAndRotation(Vector3.Lerp(_menu.position, pos, k), Quaternion.Slerp(_menu.rotation, rot, k));
     }
 
+    void TogglePlacementLock()
+    {
+        if (_mover == null) return;
+        _mover.SetPlacementLocked(!_mover.IsPlacementLocked);
+        SetStatus(_mover.IsPlacementLocked ? "Положение ворот зафиксировано" : "Жесты перемещения, поворота и масштаба включены");
+        UpdateButtonTexts();
+    }
+
     void UpdateButtonTexts()
     {
+        if (_placementText != null && _mover != null)
+            _placementText.text = _mover.IsPlacementLocked ? "Разблокировать положение" : "Зафиксировать положение";
         if (_openText != null && builder != null)
             _openText.text = builder.WicketOpen ? "Закройте калитку" : builder.OpenOrOpening ? "Закрыть ворота" : "Открыть ворота";
         if (_windowsText != null && builder != null)
