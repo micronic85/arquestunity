@@ -55,7 +55,7 @@ public static class OrbitalEarthVerification
             var globe=portal.EarthTransform;var surface=globe.Find("EarthSurface");var clouds=globe.Find("EarthClouds");
             Check(surface.GetComponent<MeshFilter>().sharedMesh.triangles.Length==portal.earthMesh.triangles.Length*4,"original sphere refined for horizon");
             Check(clouds && clouds.parent==globe && clouds.localScale.x>surface.localScale.x,"clouds physically detached above surface");
-            Check(portal.WorldRoot.GetComponentsInChildren<MeshFilter>(true).Sum(f=>f.sharedMesh.triangles.Length/3)<48000,"triangle budget");
+            Check(portal.WorldRoot.GetComponentsInChildren<MeshFilter>(true).Sum(f=>f.sharedMesh.triangles.Length/3)<51000,"triangle budget");
             var orientation=globe.rotation;Call("AdvanceClouds",60f);Tick();
             Check(Quaternion.Angle(orientation,globe.rotation)<.001f,"weather drifts independently of globe rotation");
             Check((float)typeof(GatePortal).GetField("_cloudOffset",flags).GetValue(portal)!=oldOffset,"cloud drift advances");

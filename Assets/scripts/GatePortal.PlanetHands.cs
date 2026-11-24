@@ -28,7 +28,7 @@ public partial class GatePortal
     public struct PlanetHandSample
     {
         public bool tracked,open,pointing;
-        public Vector3 palm,index;
+        public Vector3 palm,index,palmNormal;
     }
 
     sealed class PlanetHandBones
@@ -62,7 +62,7 @@ public partial class GatePortal
         _lastEarthTime=now;AdvanceClouds(Mathf.Min(dt,.1f));
         if(earthAutoSpin && !_planetScaling && !_leftPalmContact && !_rightPalmContact)
             _earth.localRotation=Quaternion.AngleAxis(dt*6,Vector3.up)*_earth.localRotation;
-        UpdateEarthPose(Mathf.Min(dt,.1f));
+        UpdateEarthPose(Mathf.Min(dt,.1f));UpdateMoonAnimation(Mathf.Min(dt,.1f));
     }
 
     void UpdateEarthPose(float dt)
@@ -126,17 +126,23 @@ public partial class GatePortal
         sample.pointing=i>1.7f && m<1.35f && r<1.35f && p<1.35f;
         Vector3 normal=Vector3.Cross(hand.indexBase.position-hand.wrist.position,hand.pinkyBase.position-hand.wrist.position).normalized;
         if(!left)normal=-normal;
-        sample.open=i>1.6f && m>1.65f && r>1.5f && p>1.4f
-            && Vector3.Dot(normal,(_earth.position-sample.palm).normalized)>.1f;
+        sample.palmNormal=normal;
+        sample.open=i>1.6f && m>1.65f && r>1.5f && p>1.4f;
         return sample;
     }
 
     void UpdatePlanetHands()
     {
-        if(!IsInside || !_earth || _earthBlend<.98f){ResetPlanetGesture(true);return;}
+        if(!IsInside || !_earth){ResetPlanetGesture(true);ResetMoonGesture();return;}
         FindPlanetHands();
-        ApplyPlanetHands(SamplePlanetHand(_planetLeft,true),SamplePlanetHand(_planetRight,false),Time.unscaledDeltaTime,
+        ApplyCelestialHands(SamplePlanetHand(_planetLeft,true),SamplePlanetHand(_planetRight,false),Time.unscaledDeltaTime,
             _travelPicker && _travelPicker.PortalMenuVisible);
+    }
+
+    void ApplyCelestialHands(PlanetHandSample left,PlanetHandSample right,float dt,bool uiBlocked)
+    {
+        bool moonOwnsHands=ApplyMoonHands(left,right,uiBlocked);
+        ApplyPlanetHands(left,right,dt,uiBlocked || moonOwnsHands);
     }
 
     bool PointNearPlanet(PlanetHandSample hand)=>hand.tracked && hand.pointing
@@ -183,7 +189,8 @@ public partial class GatePortal
     {
         delta=Quaternion.identity;
         Vector3 direction=hand.palm-_earth.position;
-        bool near=hand.tracked && hand.open && Mathf.Abs(direction.magnitude-PlanetRadius)<=palmContactDistance;
+        bool near=hand.tracked && hand.open && Mathf.Abs(direction.magnitude-PlanetRadius)<=palmContactDistance
+            &&PalmFaces(hand,_earth.position);
         if(!near){contact=false;return false;}
         direction.Normalize();
         if(!contact){contact=true;previous=direction;return false;}

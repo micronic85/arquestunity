@@ -81,14 +81,14 @@ public static class GatePortalVerification
                 Check(portal.WorldRoot.childCount==1 && portal.bakedWorldMesh,"loft preserved as alternative");
                 portal.SetWorldKind(GatePortal.PortalWorldKind.Earth);
                 var earth=portal.WorldRoot.Find("RotatingEarth");
-                Check(earth && portal.WorldRoot.GetComponentsInChildren<Renderer>().Length==4,"Earth, clouds, atmosphere and starfield");
+                Check(earth && portal.WorldRoot.GetComponentsInChildren<Renderer>().Length==5,"Earth, clouds, atmosphere, Moon and starfield");
                 Check(earth.GetComponentInChildren<MeshFilter>().sharedMesh.triangles.Length==portal.earthMesh.triangles.Length*4,"original sphere subdivided for orbital horizon");
                 Tick(portal,1);var earthRotation=earth.localRotation;Tick(portal,3);
                 Check(Quaternion.Angle(earthRotation,earth.localRotation)>5,"Earth rotation");
                 Check(portal.WorldRoot.GetComponentsInChildren<Light>().Length==0
                     &&portal.WorldRoot.GetComponentsInChildren<Camera>().Length==0,"Earth uses no extra cameras or lights");
-                Check(portal.WorldRoot.GetComponentsInChildren<MeshFilter>().Sum(f=>f.sharedMesh.triangles.Length/3)<48000,
-                    "Earth scene stays below 48000 triangles");
+                Check(portal.WorldRoot.GetComponentsInChildren<MeshFilter>().Sum(f=>f.sharedMesh.triangles.Length/3)<51000,
+                    "Earth scene stays below 51000 triangles");
             }
             var puffRenderer=visual.Find("VolumetricSmokePuffs").GetComponent<MeshFilter>();
             var puffCenters=new List<Vector4>();puffRenderer.sharedMesh.GetUVs(1,puffCenters);

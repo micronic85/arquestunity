@@ -14046,6 +14046,14 @@ MonoBehaviour:
   cloudDensity: 1
   cloudDriftDegreesPerSecond: 0.08
   nightLightsIntensity: 1.8
+  moonMesh: {fileID: 4300000, guid: 5f9370474682c474c8d5f0575065d9f5, type: 2}
+  moonTexture: {fileID: 2800000, guid: 26932efb43e8fe749b179464a9c474f4, type: 3}
+  moonNormalTexture: {fileID: 2800000, guid: e8baa3ba4f7dacd40b0ac52a0021f08e, type: 3}
+  moonRadius: 0.065
+  moonOrbitDistance: 1
+  moonOrbitSpeed: 8
+  moonSpinSpeed: 3
+  moonOrbitEnabled: 1
   earthAutoSpin: 1
   insideEarthRadius: 0.23
   palmContactDistance: 0.075

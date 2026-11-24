@@ -61,6 +61,7 @@ public partial class GatePortal
 
     void ClearWorld()
     {
+        ClearMoonWorld();
         if(_world)
         {
             _world.gameObject.SetActive(false);
@@ -112,5 +113,6 @@ public partial class GatePortal
         var atmosphere=Create("EarthAtmosphere",renderMesh,_earth,_atmosphereMaterial,false);
         atmosphere.localScale=Vector3.one*scale*1.012f;
         atmosphere.localPosition=-earthMesh.bounds.center*scale*1.012f;
+        BuildMoonWorld();
     }
 }

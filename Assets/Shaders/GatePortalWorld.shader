@@ -5,6 +5,7 @@ Shader "VorotaKraft/PortalWorld"
         _BaseMap("Baked world lighting",2D)="white" {}
         _BakedWorld("World shading mode",Float)=0
         _NightMap("Night city radiance",2D)="black" {}
+        _MoonNormal("Moon crater normal",2D)="bump" {}
         _CloudMap("Cloud optical density",2D)="black" {}
         [HideInInspector] _CloudOffset("Cloud drift",Float)=0
         [HideInInspector] _CloudDensity("Cloud density",Float)=0
@@ -44,9 +45,11 @@ Shader "VorotaKraft/PortalWorld"
             #pragma multi_compile_instancing
             #pragma multi_compile _ HARD_OCCLUSION SOFT_OCCLUSION
             #include "GatePortalCommon.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Packing.hlsl"
             TEXTURE2D(_BaseMap);SAMPLER(sampler_BaseMap);
             TEXTURE2D(_NightMap);SAMPLER(sampler_NightMap);
             TEXTURE2D(_CloudMap);SAMPLER(sampler_CloudMap);
+            TEXTURE2D(_MoonNormal);SAMPLER(sampler_MoonNormal);
             float2 CloudUV(float2 uv)
             {
                 return float2(uv.x+_CloudOffset*(.85+.15*cos(uv.y*6.2831853)),uv.y);
@@ -55,13 +58,14 @@ Shader "VorotaKraft/PortalWorld"
             {
                 return saturate(SAMPLE_TEXTURE2D(_CloudMap,sampler_CloudMap,CloudUV(uv)).r*_CloudDensity*1.35);
             }
-            struct A { float4 positionOS:POSITION; float3 normalOS:NORMAL; half4 color:COLOR; float2 uv:TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct V { float4 positionCS:SV_POSITION; float3 positionWS:TEXCOORD0; float3 normalWS:TEXCOORD1; half4 color:COLOR; float2 uv:TEXCOORD2; UNITY_VERTEX_OUTPUT_STEREO };
+            struct A { float4 positionOS:POSITION; float3 normalOS:NORMAL; float4 tangentOS:TANGENT; half4 color:COLOR; float2 uv:TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
+            struct V { float4 positionCS:SV_POSITION; float3 positionWS:TEXCOORD0; float3 normalWS:TEXCOORD1; half4 color:COLOR; float2 uv:TEXCOORD2; float4 tangentWS:TEXCOORD3; UNITY_VERTEX_OUTPUT_STEREO };
             V vert(A input)
             {
                 V o=(V)0; UNITY_SETUP_INSTANCE_ID(input); UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 o.positionWS=TransformObjectToWorld(input.positionOS.xyz);o.positionCS=TransformWorldToHClip(o.positionWS);
-                o.normalWS=TransformObjectToWorldNormal(input.normalOS);o.color=input.color;o.uv=input.uv;return o;
+                o.normalWS=TransformObjectToWorldNormal(input.normalOS);
+                o.tangentWS=float4(TransformObjectToWorldDir(input.tangentOS.xyz),input.tangentOS.w*GetOddNegativeScale());o.color=input.color;o.uv=input.uv;return o;
             }
             half4 frag(V input,bool front:SV_IsFrontFace):SV_Target
             {
@@ -93,6 +97,16 @@ Shader "VorotaKraft/PortalWorld"
                     float3 view=normalize(GetCameraPositionWS()-input.positionWS);
                     float3 sun=normalize(_PortalSunPosition.xyz-input.positionWS);
                     half sunFacing=dot(n,sun);
+                    if(_BakedWorld>4.5)
+                    {
+                        half3 mapNormal=UnpackNormal(SAMPLE_TEXTURE2D(_MoonNormal,sampler_MoonNormal,input.uv));
+                        mapNormal.xy*=.6;mapNormal.z=sqrt(saturate(1-dot(mapNormal.xy,mapNormal.xy)));
+                        float3 tangent=normalize(input.tangentWS.xyz);
+                        float3 bitangent=cross(n,tangent)*input.tangentWS.w;
+                        float3 craterNormal=normalize(tangent*mapNormal.x+bitangent*mapNormal.y+n*mapNormal.z);
+                        half light=.012+1.12*saturate(dot(craterNormal,sun));
+                        return half4(SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,input.uv).rgb*light,visibility);
+                    }
                     if(_BakedWorld>3.5)
                     {
                         clip(front?1:-1);

@@ -135,7 +135,7 @@ public partial class GatePortal
 
     void ExitPortal(bool suppress)
     {
-        bool wasInside=IsInside;
+        bool wasInside=IsInside;ResetMoonGesture();
         IsInside=false;_pendingEntry=_pendingExit=false;
         _entrySuppressed=suppress;_entryArmed=false;
         if(_gate)_gate.SetPortalInteractionLock(false);

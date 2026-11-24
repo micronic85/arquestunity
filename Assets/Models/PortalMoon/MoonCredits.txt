@@ -1,0 +1,5 @@
+Moon by Nestaeric (https://sketchfab.com/Nestaeric)
+Source: https://sketchfab.com/3d-models/moon-e6d36bb905ed42049a234e7be571d8a3
+License: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+Adapted for the portal: geometry/UV coordinate conversion, normalization, compressed textures,
+matte sun-lit shader and custom orbit/palm animation. Original GLB animation and metallic material are not used.
