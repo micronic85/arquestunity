@@ -54,6 +54,20 @@ public static class GatePortalVerification
                 "main cloud uses baked smoke");
             Check(portal.RimRoot.GetComponent<MeshFilter>().sharedMesh.bounds.size.x>.05f,
                 "smoke shell has depth");
+            if(portal.bakedWorldMesh)
+            {
+                Check(portal.bakedWorldMesh.triangles.Length/3<=350000,"loft triangle budget");
+                Check(portal.bakedWorldTexture && portal.bakedWorldTexture.width==4096,"loft baked atlas");
+                Check(portal.WorldRoot.childCount==1,"one static loft renderer replaces prototype world");
+                var loft=portal.WorldRoot.GetComponentInChildren<MeshFilter>();
+                Check(loft.sharedMesh==portal.bakedWorldMesh,"shared optimized loft mesh");
+                Check(loft.sharedMesh.uv.Length==loft.sharedMesh.vertexCount,"loft UVs survived import");
+                var material=loft.GetComponent<Renderer>().sharedMaterial;
+                Check(material.GetFloat("_BakedWorld")>.5f && material.GetTexture("_BaseMap")==portal.bakedWorldTexture,
+                    "loft uses baked stencil world shader");
+                Check(portal.WorldRoot.GetComponentsInChildren<Light>().Length==0
+                    &&portal.WorldRoot.GetComponentsInChildren<Camera>().Length==0,"no additional loft lights or cameras");
+            }
             var puffRenderer=visual.Find("VolumetricSmokePuffs").GetComponent<MeshFilter>();
             var puffCenters=new List<Vector4>();puffRenderer.sharedMesh.GetUVs(1,puffCenters);
             Check(puffCenters.Count==96*4,"96 smoke puffs use one mesh");
@@ -91,7 +105,7 @@ public static class GatePortalVerification
             portal.SetPortalEnabled(true);gate.SetProgress(1);Tick(portal,20);
             Check(gate.transform.Cast<Transform>().Count(t=>t.name=="GatePortalVisual")==1,"no duplicate visual roots");
             Capture(gate,portal,Check);
-            string report="Portal: "+checks+" checks passed; stencil clipping, camera parallax, replay, resize, both gate types; 3D smoke puffs, clear center and grazing angle.\n";
+            string report="Portal: "+checks+" checks passed; stencil clipping, camera parallax, replay, resize, both gate types; 3D smoke puffs, clear center, grazing angle and baked loft.\n";
             File.AppendAllText("D:/blender/chatgpt/unity-maintenance-report.txt",report);Debug.Log(report);
         }
         finally

@@ -8,6 +8,7 @@ CBUFFER_START(UnityPerMaterial)
     float _Reveal;
     float _ForegroundOffset;
     float _Halo;
+    float _BakedWorld;
 CBUFFER_END
 void PortalFrontOnly()
 {

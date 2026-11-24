@@ -10,6 +10,9 @@ public class GatePortal : MonoBehaviour
     public Shader worldShader;
     public Shader energyShader;
     public Texture2D smokeTexture;
+    public Mesh bakedWorldMesh;
+    public Texture2D bakedWorldTexture;
+    public Vector3 bakedWorldOffset=new Vector3(-2,0,0);
     public bool portalEnabled;
     [Min(0)] public float appearanceDuration=.8f;
     [Range(5,90)] public float rotationSpeed=28;
@@ -79,7 +82,7 @@ public class GatePortal : MonoBehaviour
         _root.gameObject.SetActive(Reveal>.001f);
         _rim.localRotation=Quaternion.AngleAxis(now*rotationSpeed,Vector3.right);
         _halo.localRotation=Quaternion.AngleAxis(-now*rotationSpeed*.55f,Vector3.right);
-        _crystal.localRotation=Quaternion.Euler(now*13,now*23,now*7);
+        if(_crystal) _crystal.localRotation=Quaternion.Euler(now*13,now*23,now*7);
         var center=(Vector4)_root.position;
         var inward=(Vector4)_root.right;
         float offset=(depthBehindGate+.08f)*Mathf.Abs(transform.lossyScale.x);
@@ -118,6 +121,15 @@ public class GatePortal : MonoBehaviour
         _rim=Create("RotatingSmokeCloud",SmokeCloud(),_root,_rimMaterial);
         _halo=Create("VolumetricSmokePuffs",SmokePuffs(),_root,_haloMaterial);
         _world=new GameObject("PortalWorld").transform;_world.SetParent(_root,false);
+        if(bakedWorldMesh && bakedWorldTexture)
+        {
+            _worldMaterial.SetFloat("_BakedWorld",1);
+            _worldMaterial.SetTexture("_BaseMap",bakedWorldTexture);
+            var loft=Create("IndustrialLoft",bakedWorldMesh,_world,_worldMaterial,false);
+            loft.localPosition=bakedWorldOffset;
+        }
+        else
+        {
         var room=new MeshData();
         var navy=new Color(.035f,.07f,.14f,0);var floor=new Color(.06f,.10f,.16f,0);
         var cyan=new Color(.015f,.55f,.75f,1);var blue=new Color(.03f,.15f,.33f,0);
@@ -141,12 +153,13 @@ public class GatePortal : MonoBehaviour
         Create("PortalHall",room.Build("Portal hall"),_world,_worldMaterial);
         _crystal=Create("FloatingCrystal",Crystal(),_world,_worldMaterial);
         _crystal.localPosition=new Vector3(3.8f,.15f,0);
+        }
         PlacePortal();
     }
 
-    Transform Create(string name,Mesh mesh,Transform parent,Material material)
+    Transform Create(string name,Mesh mesh,Transform parent,Material material,bool ownsMesh=true)
     {
-        _meshes.Add(mesh);
+        if(ownsMesh) _meshes.Add(mesh);
         var go=new GameObject(name,typeof(MeshFilter),typeof(MeshRenderer));go.transform.SetParent(parent,false);
         go.GetComponent<MeshFilter>().sharedMesh=mesh;
         var renderer=go.GetComponent<MeshRenderer>();renderer.sharedMaterial=material;

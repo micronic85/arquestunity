@@ -178,7 +178,7 @@
 - `GatePortal` находится на lastvorota; визуальный корень принадлежит самому GateBuilder.transform,
   поэтому сохраняется при пересборке, смене типа и размеров. Круг вписан в свободный проём.
   При закрытых воротах эффект отключён; при открывании плавно появляется. Круг неподвижен,
-  вращаются основа дымового облака, объёмные клубы и тестовый кристалл внутри объёмного зала.
+  вращаются основа дымового облака, объёмные клубы и сцена внутри окна портала.
   Прежние тор и геометрический ореол заменены дымом из добавленного пользователем BlenderKit
   Smoke Vortex Static / Smoke Shockwave6.vdb. В Assets/Textures/Portal/SmokeVortexDensity.png —
   запечённый фронтальный вид плотности 1024×1024. Исходный VDB статичный: движение создаётся
@@ -201,5 +201,35 @@
 - Tools → AR Gates → Verify And Capture Portal In Play Mode: проверки обоих типов, положения,
   размеров, переключателя и повтора; пиксельная проверка stencil, параллакса при смещении камеры
   и скрытия с обратной стороны; проверка назначенной текстуры, видимости облака и свободного центра
-  и устойчивой видимости клубов при ракурсе около 79° (36 проверок). Превью: D:/blender/chatgpt/unity_portal_{front,angle,grazing,close,left,right,half,closed,back}.png.
+  и устойчивой видимости клубов при ракурсе около 79° (43 проверки с лофтом). Превью: D:/blender/chatgpt/unity_portal_{front,angle,grazing,close,left,right,half,closed,back}.png.
 - APK после добавления портала не собиралась. Производительность и Depth API проверять на устройстве.
+
+
+## Industrial Loft внутри портала
+- В текущей сцене вместо тестового зала подключён облегчённый Industrial Loft из открытого Blender.
+  Исходник: 1 266 372 треугольника; вариант Quest: 257 536 (−79,7%), 308 937 вершин с UV-швами.
+  Комната — один статический меш, один материал, атлас 4096×4096 с запечённым светом/материалами.
+  В приложении нет дополнительных источников света, отражений или камеры для лофта.
+- Assets/Models/Portal/IndustrialLoft.asset; Assets/Textures/Portal/IndustrialLoft_Baked.png.
+  Импорт Android: ASTC 6×6, mipmaps. PortalWorld поддерживает _BakedWorld и _BaseMap с прежним stencil.
+  Это 3D-геометрия с параллаксом. Освещение статично; стекло упрощено до светлых поверхностей.
+  Результат приблизительно воспроизводит исходный вид, без динамических бликов и прозрачного стекла.
+- GatePortal.bakedWorldMesh / bakedWorldTexture сериализованы в сцене; bakedWorldOffset=(-2,0,0).
+  Координаты меша заданы относительно исходной камеры Blender (X внутрь, Y вверх, Z ширина).
+  Общий меш не уничтожается вместе с экземпляром портала; процедурные меши по-прежнему освобождаются.
+  Если ссылки на запечённый мир убрать, остаётся прежний тестовый зал с кристаллом.
+- Tools → AR Gates → Install Optimized Loft In Portal импортирует промежуточный meshbin из
+  D:/blender/chatgpt/loft-quest/IndustrialLoft.meshbin при наличии; иначе использует сохранённый Mesh asset.
+  Сохранённая сцена/сборка не зависят от промежуточного файла или Blender.
+- В Tools/PortalLoft сохранены скрипты подготовки, запекания и очистки Blender-копии.
+  В Blender выбрать исходную Industrial Loft и выполнить prepare_loft_quest.py, затем запустить
+  Blender -b D:/blender/chatgpt/loft-quest/industrial_loft_prepared.blend --python bake_loft_quest.py.
+  Для NVIDIA можно задать OPTIX_CACHE_PATH=D:/blender/chatgpt/optix-cache в окружении процесса.
+  cleanup_loft_quest.py запускается над industrial_loft_quest.blend и оставляет только сцену Quest.
+  Атлас PNG скопировать в Assets/Textures/Portal перед запуском пункта установки в Unity.
+- Исходная сцена сохранена отдельно: D:/blender/chatgpt/industrial_loft_source.blend.
+  Готовая копия с упакованным атласом: D:/blender/chatgpt/loft-quest/industrial_loft_quest.blend.
+  В открытом Blender добавлена Industrial Loft - Quest Baked; исходная Industrial Loft сохранена.
+- 43 проверки в Play Mode: бюджет геометрии, UV/атлас, один меш/материал, отсутствие света/камер,
+  прежние переключение типа, масштабирование, stencil, параллакс, дым, вид с ребра и закрытие ворот.
+  FPS, стерео и Depth API после этой замены ещё нужно проверить на Quest 3. APK не пересобиралась.

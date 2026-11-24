@@ -14032,6 +14032,9 @@ MonoBehaviour:
   worldShader: {fileID: 4800000, guid: 4715b51d1a8fb79458ceaf627b788963, type: 3}
   energyShader: {fileID: 4800000, guid: 83fde3f589c866e4b9950a78f3f68143, type: 3}
   smokeTexture: {fileID: 2800000, guid: 7bab2759fc29cd14b9a8e60bfc14a035, type: 3}
+  bakedWorldMesh: {fileID: 4300000, guid: e2cf1050678518e4da508a41b3dd383d, type: 2}
+  bakedWorldTexture: {fileID: 2800000, guid: eeffa03341bafa04298badcd72d0d0cc, type: 3}
+  bakedWorldOffset: {x: -2, y: 0, z: 0}
   portalEnabled: 0
   appearanceDuration: 0.8
   rotationSpeed: 28
