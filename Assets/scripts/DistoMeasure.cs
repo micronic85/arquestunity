@@ -13,6 +13,7 @@ using UnityEngine.Android;
 public class DistoMeasure : MonoBehaviour
 {
     public enum Field { Width, Height }
+    public const int MaxDimensionMm = 99999;
 
     [Tooltip("Подключаться к рулетке сразу при запуске")]
     public bool connectOnStart = true;
@@ -58,6 +59,16 @@ public class DistoMeasure : MonoBehaviour
         Height = null;
         Next = Field.Width;
         Changed?.Invoke();
+    }
+
+    /// <summary>Размер в миллиметрах из ручного ввода или рулетки; Bluetooth не требуется.</summary>
+    public bool TrySetValue(Field field, int millimeters)
+    {
+        if (millimeters <= 0 || millimeters > MaxDimensionMm) return false;
+        if (field == Field.Width) { Width = millimeters; Next = Field.Height; }
+        else { Height = millimeters; Next = Field.Width; }
+        Changed?.Invoke();
+        return true;
     }
 
     public void SetNext(Field f)
@@ -124,9 +135,7 @@ public class DistoMeasure : MonoBehaviour
     {
         if (!int.TryParse(mmText, out int mm)) return;
         if (debugLogs) Debug.Log($"DistoMeasure: {mm} мм → {Next}");
-        if (Next == Field.Width) { Width = mm; Next = Field.Height; }
-        else { Height = mm; Next = Field.Width; }
-        Changed?.Invoke();
+        TrySetValue(Next, mm);
     }
 
     void SetStatus(string s)

@@ -12,7 +12,7 @@ using UnityEngine;
 /// точный цвет RAL (tileColor) — текстуры на маленькой плитке передают цвет неверно.
 /// Цели — все рендереры ворот со слотом материала targetMaterialName.
 /// </summary>
-public class GateColorPicker : MonoBehaviour
+public partial class GateColorPicker : MonoBehaviour
 {
     [System.Serializable]
     public class Swatch
@@ -317,7 +317,7 @@ public class GateColorPicker : MonoBehaviour
         float h = measured ? measure.Height.Value / 1000f : op.HeightM;
         if (op != null) builder.PlaceInOpening(op.BottomCenter, op.Inward);
         builder.Fit(w, h);
-        SetStatus($"ворота {w * 1000:0} × {h * 1000:0} мм " + (measured ? "(по DISTO)" : "(по разметке)") + (op != null ? " в проёме" : ""));
+        SetStatus($"ворота {w * 1000:0} × {h * 1000:0} мм " + (measured ? "(по размерам)" : "(по разметке)") + (op != null ? " в проёме" : ""));
     }
 
     void SetStatus(string s) { if (_statusText != null) _statusText.text = s; }
@@ -514,17 +514,21 @@ public class GateColorPicker : MonoBehaviour
                     float bigH = H * 1.35f;
                     _fieldHighlight = RoundedQuad("FieldHighlight", _menu, half + 0.006f, bigH + 0.006f, 0.008f, ColAccent);
                     _widthBtn = PanelButton("WidthBtn", new Vector3(xl, y - bigH * 0.5f, 0), half, bigH, out _widthText,
-                        () => measure.SetNext(DistoMeasure.Field.Width), 0.62f).t;
+                        () => BeginManualInput(DistoMeasure.Field.Width), 0.62f).t;
                     _heightBtn = PanelButton("HeightBtn", new Vector3(xr, y - bigH * 0.5f, 0), half, bigH, out _heightText,
-                        () => measure.SetNext(DistoMeasure.Field.Height), 0.62f).t;
+                        () => BeginManualInput(DistoMeasure.Field.Height), 0.62f).t;
                     y -= bigH + g;
-                    PanelButton("ConnectBtn", new Vector3(xl, y - H * 0.5f, 0), half, H, out var connectText, () => measure.Connect());
-                    connectText.text = "Подключить DISTO";
-                    PanelButton("ResetBtn", new Vector3(xr, y - H * 0.5f, 0), half, H, out var resetText, () => measure.ResetValues());
-                    resetText.text = "Сбросить";
-                    y -= H + g;
+                    if (_manualEditing) y = BuildManualKeypad(y, W, H, g);
+                    else
+                    {
+                        PanelButton("ConnectBtn", new Vector3(xl, y - H * 0.5f, 0), half, H, out var connectText, () => measure.Connect());
+                        connectText.text = "Подключить DISTO";
+                        PanelButton("ResetBtn", new Vector3(xr, y - H * 0.5f, 0), half, H, out var resetText, () => measure.ResetValues());
+                        resetText.text = "Сбросить";
+                        y -= H + g;
+                    }
                 }
-                if (builder != null)
+                if (builder != null && !_manualEditing)
                 {
                     PanelButton("FitBtn", new Vector3(0, y - H * 0.5f, 0), W, H, out _fitText, FitToOpening);
                     _fitText.text = "Вписать ворота в проём";
@@ -596,6 +600,8 @@ public class GateColorPicker : MonoBehaviour
     // Пересобрать меню (другая вкладка): положение и видимость сохраняются
     void RebuildMenu()
     {
+        if (_tab != Tab.Measure) _manualEditing = false;
+        _manualDraftText = null;
         Vector3 pos = _menu != null ? _menu.position : Vector3.zero;
         Quaternion rot = _menu != null ? _menu.rotation : Quaternion.identity;
         string status = _statusText != null ? _statusText.text : "";
@@ -658,10 +664,11 @@ public class GateColorPicker : MonoBehaviour
         if (measure == null) return;
         if (_widthText != null) _widthText.text = "Ширина\n" + DistoMeasure.Format(measure.Width);
         if (_heightText != null) _heightText.text = "Высота\n" + DistoMeasure.Format(measure.Height);
-        if (_statusText != null && !string.IsNullOrEmpty(measure.Status)) _statusText.text = measure.Status;
+        if (_statusText != null && !_manualEditing && !string.IsNullOrEmpty(measure.Status)) _statusText.text = measure.Status;
         if (_fieldHighlight != null && _widthBtn != null && _heightBtn != null)
         {
-            var target = measure.Next == DistoMeasure.Field.Width ? _widthBtn : _heightBtn;
+            var field = _manualEditing ? _manualField : measure.Next;
+            var target = field == DistoMeasure.Field.Width ? _widthBtn : _heightBtn;
             _fieldHighlight.localPosition = target.localPosition + new Vector3(0, 0, 0.001f);
         }
     }
