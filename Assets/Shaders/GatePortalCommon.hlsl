@@ -22,7 +22,9 @@ float PortalForegroundVisibility(float3 portalPositionWS)
     float facing=max(abs(dot(ray,_PortalInward.xyz)),.08);
     // Compare real depth against a plane just IN FRONT of the mounting wall.
     // The wall behind the opening does not hide the distant virtual room; foreground hands can.
-    float3 probe=portalPositionWS-ray*(_ForegroundOffset/facing);
+    // Smoke may extend in front of the reference plane: test its actual surface there.
+    float distanceBehindProbe=dot(portalPositionWS-_PortalCenter.xyz,_PortalInward.xyz)+_ForegroundOffset;
+    float3 probe=portalPositionWS-ray*(max(0,distanceBehindProbe)/facing);
     return CalculateEnvironmentDepthOcclusion(probe,.01);
 #else
     return 1;

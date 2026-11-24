@@ -54,6 +54,10 @@ public static class GatePortalVerification
                 "main cloud uses baked smoke");
             Check(portal.RimRoot.GetComponent<MeshFilter>().sharedMesh.bounds.size.x>.05f,
                 "smoke shell has depth");
+            var puffRenderer=visual.Find("VolumetricSmokePuffs").GetComponent<MeshFilter>();
+            var puffCenters=new List<Vector4>();puffRenderer.sharedMesh.GetUVs(1,puffCenters);
+            Check(puffCenters.Count==96*4,"96 smoke puffs use one mesh");
+            Check(puffCenters.Max(c=>c.x)-puffCenters.Min(c=>c.x)>.30f,"puff centers occupy real depth");
             foreach(var type in new[]{GateBuilder.GateKind.Sectional,GateBuilder.GateKind.Roller})
             {
                 gate.SetGateType(type);gate.SetProgress(0);Tick(portal,10);
@@ -87,7 +91,7 @@ public static class GatePortalVerification
             portal.SetPortalEnabled(true);gate.SetProgress(1);Tick(portal,20);
             Check(gate.transform.Cast<Transform>().Count(t=>t.name=="GatePortalVisual")==1,"no duplicate visual roots");
             Capture(gate,portal,Check);
-            string report="Portal: "+checks+" checks passed; stencil clipping, camera parallax, replay, resize, both gate types; baked smoke and clear center.\n";
+            string report="Portal: "+checks+" checks passed; stencil clipping, camera parallax, replay, resize, both gate types; 3D smoke puffs, clear center and grazing angle.\n";
             File.AppendAllText("D:/blender/chatgpt/unity-maintenance-report.txt",report);Debug.Log(report);
         }
         finally
@@ -168,6 +172,22 @@ public static class GatePortalVerification
             CameraAt(1.3f);camera.transform.LookAt(center,gate.transform.up);Render("angle");
             camera.transform.position=center+gate.transform.TransformVector(new Vector3(-2.8f,0,.55f));
             camera.transform.LookAt(center,gate.transform.up);Render("close");
+            // Nearly edge-on, matching the headset feedback: puffs must still make a broad body.
+            camera.transform.position=center+gate.transform.TransformVector(new Vector3(-.85f,0,4.2f));
+            camera.transform.LookAt(center,gate.transform.up);
+            var side=Render("grazing");
+            var puffs=smoke.Single(r=>r.transform.name=="VolumetricSmokePuffs");
+            puffs.enabled=false;var thinSide=Render(null);puffs.enabled=true;
+            int sidePixels=0;int minX=1000,maxX=0;
+            for(int y=80;y<820;y++)for(int x=0;x<1000;x++)
+            {
+                int i=y*1000+x;
+                int diff=Math.Abs(side[i].r-thinSide[i].r)+Math.Abs(side[i].g-thinSide[i].g)+Math.Abs(side[i].b-thinSide[i].b);
+                if(diff<=10)continue;
+                sidePixels++;minX=Math.Min(minX,x);maxX=Math.Max(maxX,x);
+            }
+            check(sidePixels>3000,"cloud stays visible nearly edge-on: "+sidePixels);
+            check(maxX-minX>60,"cloud has visible thickness nearly edge-on: "+(maxX-minX));
             CameraAt(0);gate.SetProgress(.5f);Tick(portal,31);Render("half");
             gate.SetProgress(0);Tick(portal,32);Render("closed");
             gate.SetProgress(1);Tick(portal,33);

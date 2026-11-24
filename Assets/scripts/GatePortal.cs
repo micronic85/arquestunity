@@ -115,8 +115,8 @@ public class GatePortal : MonoBehaviour
         _materials=new[]{_maskMaterial,_worldMaterial,_rimMaterial,_haloMaterial};
         _root=new GameObject("GatePortalVisual").transform;_root.SetParent(transform,false);
         _mask=Create("ApertureMask",Disk(),_root,_maskMaterial);
-        _rim=Create("RotatingSmokeCloud",SmokeCloud(false),_root,_rimMaterial);
-        _halo=Create("DriftingSmokeWisps",SmokeCloud(true),_root,_haloMaterial);
+        _rim=Create("RotatingSmokeCloud",SmokeCloud(),_root,_rimMaterial);
+        _halo=Create("VolumetricSmokePuffs",SmokePuffs(),_root,_haloMaterial);
         _world=new GameObject("PortalWorld").transform;_world.SetParent(_root,false);
         var room=new MeshData();
         var navy=new Color(.035f,.07f,.14f,0);var floor=new Color(.06f,.10f,.16f,0);
@@ -165,9 +165,9 @@ public class GatePortal : MonoBehaviour
         return data.Build("Portal mask disk");
     }
 
-    // Shallow curved shells give the baked smoke some thickness from oblique viewpoints.
+    // Curved body plus smoke puffs distributed through a toroidal volume.
     // The inner aperture stays clear; the outer boundary is feathered by the smoke shader.
-    static Mesh SmokeCloud(bool wisps)
+    static Mesh SmokeCloud()
     {
         var data=new MeshData();const int around=128,across=12;
         for(int i=0;i<around;i++)for(int j=0;j<across;j++)
@@ -178,14 +178,47 @@ public class GatePortal : MonoBehaviour
                 int ia=i+(k==1||k==2?1:0),ja=j+(k>=2?1:0);
                 float angle=ia*2*Mathf.PI/around,t=(float)ja/across;
                 float radius=Mathf.Lerp(.70f,1.28f,t);
-                float x=-.025f-(wisps?.065f:.04f)-.07f*Mathf.Sin(t*Mathf.PI);
+                float x=-.015f+.16f*Mathf.Sin(t*Mathf.PI);
                 data.vertices.Add(new Vector3(x,Mathf.Sin(angle)*radius,Mathf.Cos(angle)*radius));
                 data.uv.Add(new Vector2(Mathf.Cos(angle)*radius,Mathf.Sin(angle)*radius));
                 data.colors.Add(Color.white);
             }
             data.Quad(start);
         }
-        return data.Build(wisps?"Portal smoke wisps":"Portal curved smoke cloud");
+        return data.Build("Portal curved smoke cloud");
+    }
+
+    // Centers occupy three rings at different depths. The shader faces each soft puff towards
+    // the current XR eye, so the body keeps its thickness even when seen almost edge-on.
+    static Mesh SmokePuffs()
+    {
+        var vertices=new List<Vector3>();var uv=new List<Vector2>();
+        var centers=new List<Vector4>();var colors=new List<Color>();var triangles=new List<int>();
+        const int around=32,layers=3;
+        for(int layer=0;layer<layers;layer++)for(int i=0;i<around;i++)
+        {
+            float phase=Mathf.Repeat(i*.618034f+layer*.37f,1);
+            float angle=(i+layer*.37f)*2*Mathf.PI/around;
+            float radius=1.035f+.035f*Mathf.Sin(angle*7+layer);
+            float depth=.38f+(layer-1)*.13f+.035f*Mathf.Sin(angle*5+layer);
+            var center=new Vector3(depth,Mathf.Sin(angle)*radius,Mathf.Cos(angle)*radius);
+            float size=Mathf.Lerp(.16f,.225f,phase);
+            int start=vertices.Count;
+            for(int k=0;k<4;k++)
+            {
+                var corner=new Vector2(k==1||k==2?1:-1,k>=2?1:-1);
+                vertices.Add(center+new Vector3(0,corner.y*size,corner.x*size));uv.Add(corner);
+                centers.Add(new Vector4(center.x,center.y,center.z,size));
+                colors.Add(new Color(phase,(float)layer/(layers-1),0,1));
+            }
+            triangles.AddRange(new[]{start,start+1,start+2,start,start+2,start+3});
+        }
+        var mesh=new Mesh{name="Portal 3D smoke puffs"};
+        mesh.SetVertices(vertices);mesh.SetUVs(0,uv);mesh.SetUVs(1,centers);mesh.SetColors(colors);
+        mesh.SetTriangles(triangles,0);
+        // Bounds include the camera-facing expansion in every direction.
+        mesh.bounds=new Bounds(new Vector3(.38f,0,0),new Vector3(1.1f,2.7f,2.7f));
+        return mesh;
     }
 
     static Mesh Crystal()
