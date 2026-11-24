@@ -412,7 +412,7 @@ public partial class GateColorPicker : MonoBehaviour
 
         // Вкладки
         float tabW = (W - g * 3f) / 4f, tabH = H * 0.85f;
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < (_portal != null && _portal.IsInside ? 1 : 4); i++)
         {
             var tab = (Tab)i;
             var b = PanelButton("Tab_" + i, new Vector3(-W * 0.5f + tabW * 0.5f + i * (tabW + g), y - tabH * 0.5f, 0), tabW, tabH,
@@ -425,6 +425,11 @@ public partial class GateColorPicker : MonoBehaviour
         switch (_tab)
         {
             case Tab.Gate:
+                if (_portal != null && _portal.IsInside)
+                {
+                    y = BuildPortalInteriorButtons(y, W, H, g);
+                    break;
+                }
                 if (builder != null)
                 {
                     _menuGateKind = builder.gateKind;
@@ -604,7 +609,7 @@ public partial class GateColorPicker : MonoBehaviour
     {
         if (_tab != Tab.Measure) _manualEditing = false;
         _manualDraftText = null;
-        _portalToggleText = _portalWorldText = null;
+        _portalToggleText = _portalWorldText = _portalAutoText = null;
         Vector3 pos = _menu != null ? _menu.position : Vector3.zero;
         Quaternion rot = _menu != null ? _menu.rotation : Quaternion.identity;
         string status = _statusText != null ? _statusText.text : "";

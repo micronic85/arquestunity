@@ -33,6 +33,7 @@ public static class GatePortalVerification
         var kind=gate.gateKind;float w=gate.openingWidth,h=gate.openingHeight,p=gate.Progress;
         var pos=gate.transform.position;var rot=gate.transform.rotation;var scale=gate.transform.localScale;
         bool enabled=portal.portalEnabled;float duration=portal.appearanceDuration;var worldKind=portal.worldKind;
+        bool oldEntry=portal.allowEarthEntry;portal.allowEarthEntry=false;
         int checks=0;
         void Check(bool condition,string name)
         {
@@ -133,7 +134,7 @@ public static class GatePortalVerification
         {
             gate.StopAnimation();gate.transform.SetPositionAndRotation(pos,rot);gate.transform.localScale=scale;
             gate.SetGateType(kind);gate.Build(w,h);gate.SetProgress(p);
-            portal.SetWorldKind(worldKind);portal.appearanceDuration=duration;portal.SetPortalEnabled(enabled);Tab(picker);
+            portal.allowEarthEntry=oldEntry;portal.SetWorldKind(worldKind);portal.appearanceDuration=duration;portal.SetPortalEnabled(enabled);Tab(picker);
         }
     }
 

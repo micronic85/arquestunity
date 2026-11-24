@@ -262,6 +262,7 @@ public partial class GateBuilder
     /// <summary>Повернуть калитку (°, 0 — закрыта); только при закрытых воротах.</summary>
     public void SetWicketAngle(float angle)
     {
+        if (IsPortalInteractionLocked) angle = 0;
         if (!CanSwingWicket) angle = 0f;
         WicketAngle = Mathf.Clamp(angle, 0f, wicketMaxAngle);
         ApplyWicketAngle();

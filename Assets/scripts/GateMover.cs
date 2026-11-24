@@ -36,9 +36,11 @@ public class GateMover : MonoBehaviour
     public bool lockPlacementAfterFit = true;
     public bool IsFittedToOpening { get; private set; }
     public bool IsPlacementLocked { get; private set; }
-    public bool CanMove => allowMove && !IsPlacementLocked;
-    public bool CanRotate => allowRotate && !IsPlacementLocked;
-    public bool CanScale => allowScale && !IsPlacementLocked;
+    public bool PortalSuspended {get;private set;}
+    bool _portalNeedsNeutral;
+    public bool CanMove => allowMove && !IsPlacementLocked && !PortalSuspended;
+    public bool CanRotate => allowRotate && !IsPlacementLocked && !PortalSuspended;
+    public bool CanScale => allowScale && !IsPlacementLocked && !PortalSuspended;
     public float minScale = 0.1f;
     public float maxScale = 5f;
 
@@ -86,7 +88,7 @@ public class GateMover : MonoBehaviour
 
     void Update()
     {
-        if (IsPlacementLocked) { ResetGesture(); return; }
+        if (IsPlacementLocked || PortalSuspended) { ResetGesture(); return; }
         bool hands = EnsureHands();
         bool bonesL = hands && EnsureBones(leftHand, _l);
         bool bonesR = hands && EnsureBones(rightHand, _r);
@@ -94,6 +96,12 @@ public class GateMover : MonoBehaviour
         if (!hands || !bonesL || !bonesR) { SetMode(Mode.None); return; }
 
         Mode gesture = DetectGesture();
+        if (_portalNeedsNeutral)
+        {
+            ResetGesture();
+            if (Tracked(leftHand, _l) && Tracked(rightHand, _r) && gesture == Mode.None) _portalNeedsNeutral = false;
+            return;
+        }
         if (HandleGrabbed()) gesture = Mode.None;
 
         if (gesture != _candidate) { _candidate = gesture; _gestureTimer = 0f; }
@@ -175,7 +183,7 @@ public class GateMover : MonoBehaviour
 
     Mode DetectGesture()
     {
-        if (IsPlacementLocked) return Mode.None;
+        if (IsPlacementLocked || PortalSuspended) return Mode.None;
         if (!Tracked(leftHand, _l) || !Tracked(rightHand, _r)) return Mode.None;
         if (CanMove || CanRotate)
             if (IsFist(_l) && IsFist(_r)) return Mode.Move;
@@ -223,7 +231,7 @@ public class GateMover : MonoBehaviour
 
     void Apply()
     {
-        if (IsPlacementLocked) { ResetGesture(); return; }
+        if (IsPlacementLocked || PortalSuspended) { ResetGesture(); return; }
         SampleHands(out var l, out var r);
         Vector3 mid = (l + r) * 0.5f;
         float dist = Vector3.Distance(l, r);
@@ -287,6 +295,7 @@ public class GateMover : MonoBehaviour
     /// <summary>Сбросить масштаб в 1:1 (можно повесить на кнопку/событие).</summary>
     public void ResetScale()
     {
+        if (PortalSuspended) return;
         var builder = GetComponent<GateBuilder>();
         Vector3 offset = builder != null ? builder.modelOffset : Vector3.zero;
         Vector3 bottom = transform.TransformPoint(offset);
@@ -297,6 +306,7 @@ public class GateMover : MonoBehaviour
     /// <summary>После точной примерки масштаб 1:1, жесты полностью заблокированы.</summary>
     public void LockPlacementForFit()
     {
+        if (PortalSuspended) return;
         ResetScale();
         IsFittedToOpening = true;
         SetPlacementLocked(lockPlacementAfterFit);
@@ -305,8 +315,15 @@ public class GateMover : MonoBehaviour
     /// <summary>Явная фиксация/разблокировка из меню, без изменения текущего положения.</summary>
     public void SetPlacementLocked(bool locked)
     {
+        if (PortalSuspended) return;
         IsPlacementLocked = locked;
         ResetGesture();
+    }
+
+    public void SetPortalSuspended(bool suspended)
+    {
+        if (PortalSuspended == suspended) return;
+        PortalSuspended = suspended; _portalNeedsNeutral = true; ResetGesture();
     }
 
     void ResetGesture()

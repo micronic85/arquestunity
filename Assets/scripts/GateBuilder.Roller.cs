@@ -35,6 +35,7 @@ public partial class GateBuilder
 
     public void SetGateType(GateKind kind)
     {
+        if (IsPortalInteractionLocked) return;
         if (gateKind == kind) return;
         StopAnimation();
         gateKind = kind;

@@ -45,6 +45,7 @@ public partial class GateBuilder : MonoBehaviour
     /// <summary>Включить/выключить окна и калитку и пересобрать ворота (размер, цвет и положение сохраняются).</summary>
     public void SetOptions(bool windows, bool wicket)
     {
+        if (IsPortalInteractionLocked) return;
         windowsEnabled = windows;
         wicketEnabled = wicket;
         Rebuild();
@@ -304,6 +305,7 @@ public partial class GateBuilder : MonoBehaviour
     /// </summary>
     public void PlaceInOpening(Vector3 bottomCenter, Vector3 inward, bool lockScale = true)
     {
+        if (IsPortalInteractionLocked) return;
         inward.y = 0;
         if (inward.sqrMagnitude < 1e-4f) inward = transform.right;
         inward.Normalize();
@@ -317,6 +319,7 @@ public partial class GateBuilder : MonoBehaviour
     /// (если разметку/замер делали снаружи).</summary>
     public void FlipSide()
     {
+        if (IsPortalInteractionLocked) return;
         StopAnimation();
         Vector3 bottom = transform.position + transform.TransformVector(modelOffset);
         float s = transform.localScale.x;
@@ -328,6 +331,7 @@ public partial class GateBuilder : MonoBehaviour
     /// <summary>Точная примерка по размерам, включая DISTO без выбранного проёма.</summary>
     public void Fit(float width, float height)
     {
+        if (IsPortalInteractionLocked) return;
         Vector3 bottom = transform.TransformPoint(modelOffset);
         transform.localScale = Vector3.one;
         transform.position = bottom - transform.TransformVector(modelOffset);
@@ -338,6 +342,7 @@ public partial class GateBuilder : MonoBehaviour
     /// <summary>Собрать ворота под проём (м).</summary>
     public void Build(float width, float height)
     {
+        if (IsPortalInteractionLocked) return;
         openingWidth = width;
         openingHeight = height;
         Rebuild();
@@ -359,6 +364,7 @@ public partial class GateBuilder : MonoBehaviour
     float _animTarget;
     public void AnimateTo(float target)
     {
+        if (IsPortalInteractionLocked) return;
         StopAnimation();
         _animTarget = Mathf.Clamp01(target);
         _anim = StartCoroutine(AnimateRoutine());
@@ -384,6 +390,7 @@ public partial class GateBuilder : MonoBehaviour
     /// <summary>0 — закрыты, 1 — открыты.</summary>
     public void SetProgress(float p)
     {
+        if (IsPortalInteractionLocked && p < 1f) return;
         if (WicketOpen) return; // калитка открыта — ворота не поднимаются (как датчик калитки)
         Progress = Mathf.Clamp01(p);
         ApplyPose();
@@ -393,6 +400,7 @@ public partial class GateBuilder : MonoBehaviour
 
     public void Rebuild()
     {
+        if (IsPortalInteractionLocked) return;
         if (_templates == null) return;
         ReleaseRollerMeshes();
         _handleAttached = false;

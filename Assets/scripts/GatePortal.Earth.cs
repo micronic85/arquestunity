@@ -11,7 +11,9 @@ public partial class GatePortal
 
     public void SetWorldKind(PortalWorldKind kind)
     {
+        if(IsInside)ReturnToRoom();
         worldKind=kind;
+        if(kind!=PortalWorldKind.Earth)_entrySuppressed=false;
         if(!_root)return;
         ClearWorld();BuildWorld();PlacePortal();Tick(Time.unscaledTime);
     }
@@ -32,6 +34,7 @@ public partial class GatePortal
 
     void BuildEarthWorld()
     {
+        _lastEarthTime=-1;_earthBlend=0;ResetPlanetGesture(true);
         _worldMaterial.SetFloat("_BakedWorld",1);_worldMaterial.SetTexture("_BaseMap",spaceTexture);
         var background=new MeshData();
         background.Box(new Vector3(10,0,0),new Vector3(36,30,36),Color.white);
@@ -48,6 +51,7 @@ public partial class GatePortal
         _materials.Add(_earthMaterial);_materials.Add(_atmosphereMaterial);
         _earth=new GameObject("RotatingEarth").transform;_earth.SetParent(_world,false);
         _earth.localPosition=new Vector3(4.8f,0,0);
+        _earth.localRotation=Quaternion.Euler(0,0,23.4f);
         float radius=Mathf.Max(earthMesh.bounds.extents.x,Mathf.Max(earthMesh.bounds.extents.y,earthMesh.bounds.extents.z));
         float scale=1.55f/Mathf.Max(radius,.001f);
         var globe=Create("EarthSurface",earthMesh,_earth,_earthMaterial,false);

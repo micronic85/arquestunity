@@ -14032,6 +14032,15 @@ MonoBehaviour:
   earthMesh: {fileID: 4300000, guid: d103ffa837233534daa68d733386bac5, type: 3}
   earthTexture: {fileID: 2800000, guid: 19dcdc22008309643a435bfa15affdb9, type: 3}
   spaceTexture: {fileID: 2800000, guid: a36530de48f48214e8decf4cc52eeb9b, type: 3}
+  earthAutoSpin: 1
+  insideEarthRadius: 0.23
+  palmContactDistance: 0.075
+  planetMinScale: 0.5
+  planetMaxScale: 1.75
+  allowEarthEntry: 1
+  crossingMargin: 0.035
+  headClearance: 0.08
+  headOverride: {fileID: 0}
   maskShader: {fileID: 4800000, guid: 8384d685c8188984d8f2dcce6bba7143, type: 3}
   worldShader: {fileID: 4800000, guid: 4715b51d1a8fb79458ceaf627b788963, type: 3}
   energyShader: {fileID: 4800000, guid: 83fde3f589c866e4b9950a78f3f68143, type: 3}

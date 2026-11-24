@@ -3,6 +3,11 @@ Shader "VorotaKraft/PortalEnergy"
     Properties
     {
         _SmokeTex("Baked Blender smoke",2D)="black" {}
+        [HideInInspector] _PortalTravel("Travel enabled",Float)=0
+        [HideInInspector] _PortalInside("Inside",Float)=0
+        [HideInInspector] _PortalEntryReady("Entry ready",Float)=0
+        [HideInInspector] _PortalExitPending("Exit pending",Float)=0
+        [HideInInspector] _PortalRadius("Aperture radius",Float)=1
         _Reveal("Reveal",Float)=0
         _Halo("Volume puffs",Float)=0
         _ForegroundOffset("Foreground depth offset",Float)=.23

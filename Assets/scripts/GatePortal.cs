@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>Optional stereoscopic portal window behind either gate type. Baked smoke from Blender; no secondary cameras or volume simulation.</summary>
+[DefaultExecutionOrder(-100)]
 [DisallowMultipleComponent]
 public partial class GatePortal : MonoBehaviour
 {
@@ -34,18 +35,25 @@ public partial class GatePortal : MonoBehaviour
 
     void OnEnable()
     {
+        UnityEngine.Rendering.RenderPipelineManager.beginCameraRendering+=BeforePortalCameraRender;
         _gate=GetComponent<GateBuilder>();
         if(_gate) _gate.Built+=OnGateBuilt;
     }
     void OnDisable()
     {
+        UnityEngine.Rendering.RenderPipelineManager.beginCameraRendering-=BeforePortalCameraRender;
         if(_gate) _gate.Built-=OnGateBuilt;
+        ExitPortal(false);
         if(_root) _root.gameObject.SetActive(false);
     }
-    void Update()=>Tick(Time.unscaledTime);
+    void Update()
+    {
+        UpdatePortalTravel();Tick(Time.unscaledTime);UpdatePlanetHands();
+    }
 
     public void SetPortalEnabled(bool value)
     {
+        if(!value && IsInside)ReturnToRoom();
         portalEnabled=value;
         if(value)
         {
@@ -56,7 +64,7 @@ public partial class GatePortal : MonoBehaviour
 
     public void ReplayAppearance()
     {
-        if(!_gate) return;
+        if(!_gate || IsInside) return;
         SetPortalEnabled(true);
         _gate.StopAnimation();_gate.SetWicketAngle(0);_gate.SetProgress(0);
         _wasOpening=false;_gate.AnimateTo(1);
@@ -72,7 +80,7 @@ public partial class GatePortal : MonoBehaviour
     void Tick(float now)
     {
         if(!_gate) return;
-        if(!portalEnabled) {Reveal=0;if(_root)_root.gameObject.SetActive(false);return;}
+        if(!portalEnabled || _entrySuppressed) {Reveal=0;if(_root)_root.gameObject.SetActive(false);return;}
         EnsureVisuals();PlacePortal();
         bool opening=_gate.Progress>.02f;
         if(opening&&!_wasOpening) _appearanceStart=now;
@@ -82,13 +90,14 @@ public partial class GatePortal : MonoBehaviour
         _root.gameObject.SetActive(Reveal>.001f);
         _rim.localRotation=Quaternion.AngleAxis(now*rotationSpeed,Vector3.right);
         _halo.localRotation=Quaternion.AngleAxis(-now*rotationSpeed*.55f,Vector3.right);
-        if(_earth) _earth.localRotation=Quaternion.Euler(0,now*6,23.4f);
+        UpdateEarthAnimation(now);
         if(_crystal) _crystal.localRotation=Quaternion.Euler(now*13,now*23,now*7);
         var center=(Vector4)_root.position;
         var inward=(Vector4)_root.right;
         float offset=(depthBehindGate+.08f)*Mathf.Abs(transform.lossyScale.x);
         foreach(var material in _materials)
         {
+            SetTravelShaderState(material);
             material.SetVector("_PortalCenter",center);material.SetVector("_PortalInward",inward);
             material.SetFloat("_Reveal",Reveal);material.SetFloat("_ForegroundOffset",offset);
         }
@@ -260,6 +269,7 @@ public partial class GatePortal : MonoBehaviour
 
     void OnDestroy()
     {
+        ExitPortal(false);
         if(_root) Destroy(_root.gameObject);
         foreach(var mesh in _meshes)if(mesh)Destroy(mesh);
         foreach(var material in _materials)if(material)Destroy(material);

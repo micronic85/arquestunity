@@ -84,6 +84,11 @@ public class GateController : MonoBehaviour
 
     void Update()
     {
+        if (builder != null && builder.IsPortalInteractionLocked)
+        {
+            if (_source != GrabSource.None) EndGrab();
+            return;
+        }
         bool grabbed = IsGrabbed();
 
         if (grabbed && _source == GrabSource.None)
@@ -102,6 +107,26 @@ public class GateController : MonoBehaviour
         _progress = Mathf.Clamp(_grabStartProgress + (pos.Value.y - _grabStartY) / travel, 0f, maxProgress);
         if (builder != null) builder.SetProgress(_progress);
         else gateAnimator.SetFloat(GateProgressId, _progress);
+    }
+
+    bool _portalSuspended, _portalGrabEnabled, _portalHandGrabEnabled;
+    public void SetPortalSuspended(bool suspended)
+    {
+        if (_portalSuspended == suspended) return;
+        _portalSuspended = suspended;
+        if (suspended)
+        {
+            if (_source != GrabSource.None) EndGrab();
+            _portalGrabEnabled = handleGrab != null && handleGrab.enabled;
+            _portalHandGrabEnabled = handleHandGrab != null && handleHandGrab.enabled;
+            if (handleGrab != null) handleGrab.enabled = false;
+            if (handleHandGrab != null) handleHandGrab.enabled = false;
+        }
+        else
+        {
+            if (handleGrab != null) handleGrab.enabled = _portalGrabEnabled;
+            if (handleHandGrab != null) handleHandGrab.enabled = _portalHandGrabEnabled;
+        }
     }
 
     bool IsGrabbed()

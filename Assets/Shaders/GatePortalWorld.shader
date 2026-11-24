@@ -5,6 +5,12 @@ Shader "VorotaKraft/PortalWorld"
         _BaseMap("Baked world lighting",2D)="white" {}
         _BakedWorld("World shading mode",Float)=0
         [HideInInspector] _ZWrite("Depth write",Float)=1
+        _PortalCompare("Portal stencil comparison",Float)=3
+        [HideInInspector] _PortalTravel("Travel enabled",Float)=0
+        [HideInInspector] _PortalInside("Inside",Float)=0
+        [HideInInspector] _PortalEntryReady("Entry ready",Float)=0
+        [HideInInspector] _PortalExitPending("Exit pending",Float)=0
+        [HideInInspector] _PortalRadius("Aperture radius",Float)=1
         _Reveal("Reveal",Float)=0
         _Halo("Halo",Float)=0
         _ForegroundOffset("Foreground depth offset",Float)=.23
@@ -22,12 +28,13 @@ Shader "VorotaKraft/PortalWorld"
             ZWrite [_ZWrite]
             ZTest LEqual
             Blend SrcAlpha OneMinusSrcAlpha, One OneMinusSrcAlpha
-            Stencil { Ref 64 ReadMask 64 WriteMask 0 Comp Equal Pass Keep }
+            Stencil { Ref 64 ReadMask 64 WriteMask 0 Comp [_PortalCompare] Pass Keep }
             HLSLPROGRAM
             #pragma target 3.5
             #pragma vertex vert
             #pragma fragment frag
             #pragma multi_compile_instancing
+            #pragma multi_compile _ HARD_OCCLUSION SOFT_OCCLUSION
             #include "GatePortalCommon.hlsl"
             TEXTURE2D(_BaseMap);SAMPLER(sampler_BaseMap);
             struct A { float4 positionOS:POSITION; float3 normalOS:NORMAL; half4 color:COLOR; float2 uv:TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
@@ -40,8 +47,7 @@ Shader "VorotaKraft/PortalWorld"
             }
             half4 frag(V input,bool front:SV_IsFrontFace):SV_Target
             {
-                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);PortalFrontOnly();
-                clip(dot(input.positionWS-_PortalCenter.xyz,_PortalInward.xyz)-.005);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);PortalClipWorld(input.positionWS);
                 if(_BakedWorld>.5 && _BakedWorld<1.5)
                     return half4(SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,input.uv).rgb,_Reveal);
                 if(_BakedWorld>1.5)
