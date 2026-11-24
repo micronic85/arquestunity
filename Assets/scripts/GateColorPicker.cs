@@ -150,6 +150,7 @@ public partial class GateColorPicker : MonoBehaviour
     {
         if (builder == null) builder = GetComponent<GateBuilder>();
         _mover = builder != null ? builder.GetComponent<GateMover>() : GetComponent<GateMover>();
+        _portal = builder != null ? builder.GetComponent<GatePortal>() : null;
         // в сцене палитра сохранена списком — чёрный (добавлен позже) дописываем, если его там нет
         if (!palette.Exists(sw => sw.label == "RAL 9005"))
         {
@@ -464,6 +465,7 @@ public partial class GateColorPicker : MonoBehaviour
                         _placementText.text = _mover.IsPlacementLocked ? "Разблокировать положение" : "Зафиксировать положение";
                         y -= H;
                     }
+                    y = BuildPortalButtons(y, W, H, g);
                 }
                 break;
 
@@ -602,6 +604,7 @@ public partial class GateColorPicker : MonoBehaviour
     {
         if (_tab != Tab.Measure) _manualEditing = false;
         _manualDraftText = null;
+        _portalToggleText = null;
         Vector3 pos = _menu != null ? _menu.position : Vector3.zero;
         Quaternion rot = _menu != null ? _menu.rotation : Quaternion.identity;
         string status = _statusText != null ? _statusText.text : "";
@@ -904,6 +907,7 @@ public partial class GateColorPicker : MonoBehaviour
 
     void UpdateButtonTexts()
     {
+        RefreshPortalButtons();
         if (_rollerClearText != null && builder != null)
             _rollerClearText.text = $"Под коробом {builder.RollerClearHeight * 1000:0} мм";
         if (_sectionalTypeText != null && builder != null)

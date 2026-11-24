@@ -1,0 +1,51 @@
+Shader "VorotaKraft/PortalWorld"
+{
+    Properties
+    {
+        _Reveal("Reveal",Float)=0
+        _Halo("Halo",Float)=0
+        _ForegroundOffset("Foreground depth offset",Float)=.23
+        [HideInInspector] _PortalCenter("Portal center",Vector)=(0,0,0,0)
+        [HideInInspector] _PortalInward("Portal inward",Vector)=(1,0,0,0)
+    }
+    SubShader
+    {
+        Tags { "RenderPipeline"="UniversalPipeline" "Queue"="Geometry+5" "RenderType"="Opaque" }
+        Pass
+        {
+            Name "PortalRoom"
+            Tags { "LightMode"="SRPDefaultUnlit" }
+            Cull Off
+            ZWrite On
+            ZTest LEqual
+            Blend SrcAlpha OneMinusSrcAlpha, One OneMinusSrcAlpha
+            Stencil { Ref 64 ReadMask 64 WriteMask 0 Comp Equal Pass Keep }
+            HLSLPROGRAM
+            #pragma target 3.5
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma multi_compile_instancing
+            #include "GatePortalCommon.hlsl"
+            struct A { float4 positionOS:POSITION; float3 normalOS:NORMAL; half4 color:COLOR; UNITY_VERTEX_INPUT_INSTANCE_ID };
+            struct V { float4 positionCS:SV_POSITION; float3 positionWS:TEXCOORD0; float3 normalWS:TEXCOORD1; half4 color:COLOR; UNITY_VERTEX_OUTPUT_STEREO };
+            V vert(A input)
+            {
+                V o=(V)0; UNITY_SETUP_INSTANCE_ID(input); UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+                o.positionWS=TransformObjectToWorld(input.positionOS.xyz);o.positionCS=TransformWorldToHClip(o.positionWS);
+                o.normalWS=TransformObjectToWorldNormal(input.normalOS);o.color=input.color;return o;
+            }
+            half4 frag(V input,bool front:SV_IsFrontFace):SV_Target
+            {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);PortalFrontOnly();
+                clip(dot(input.positionWS-_PortalCenter.xyz,_PortalInward.xyz)-.005);
+                float3 normal=normalize(input.normalWS)*(front?1:-1);
+                half light=.30+.70*saturate(dot(normal,normalize(float3(-.4,.8,.3))));
+                half3 color=input.color.rgb*(light+input.color.a*1.7);
+                float depth=max(0,dot(input.positionWS-_PortalCenter.xyz,_PortalInward.xyz));
+                color=lerp(color,half3(.015,.055,.12),saturate(depth*.025));
+                return half4(color,_Reveal);
+            }
+            ENDHLSL
+        }
+    }
+}

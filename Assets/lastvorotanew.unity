@@ -13645,6 +13645,7 @@ GameObject:
   - component: {fileID: 7685820126626308159}
   - component: {fileID: 7685820126626308160}
   - component: {fileID: 7685820126626308161}
+  - component: {fileID: 7685820126626308162}
   m_Layer: 0
   m_Name: lastvorota
   m_TagString: Untagged
@@ -13853,7 +13854,7 @@ MonoBehaviour:
   allowVertical: 1
   allowRotate: 1
   allowScale: 1
-  lockScaleAfterFit: 1
+  lockPlacementAfterFit: 1
   minScale: 0.1
   maxScale: 3
   smoothing: 0.5
@@ -13982,6 +13983,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3aaabfb5c4de76143a389542df9c7408, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GateBuilder
+  gateKind: 0
+  rollerBoxSize: 0.3
+  rollerGuideWidth: 0.09
+  rollerSlatPitch: 0.055
+  rollerTopGap: 0.02
   wicketHeight: 2
   wicketMaxAngle: 100
   debugWicketAngle: -1
@@ -14010,6 +14016,25 @@ MonoBehaviour:
   debugLogs: 0
   debugProgress: -1
   debugSnapshot: 0
+--- !u!114 &7685820126626308162
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6533024917476223039}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5da24f61b2faabf4385e0424945b601f, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::GatePortal
+  maskShader: {fileID: 4800000, guid: 8384d685c8188984d8f2dcce6bba7143, type: 3}
+  worldShader: {fileID: 4800000, guid: 4715b51d1a8fb79458ceaf627b788963, type: 3}
+  energyShader: {fileID: 4800000, guid: 83fde3f589c866e4b9950a78f3f68143, type: 3}
+  portalEnabled: 0
+  appearanceDuration: 0.8
+  rotationSpeed: 28
+  depthBehindGate: 0.15
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
