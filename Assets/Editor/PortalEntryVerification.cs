@@ -94,6 +94,16 @@ public static class PortalEntryVerification
                 &&(!controller.handleHandGrab || !controller.handleHandGrab.enabled),"handle interactions disabled");
             Check(Button(picker,"PortalReturnBtn")!=null && Button(picker,"PlanetAutoBtn")!=null
                 && Button(picker,"PlanetResetBtn")!=null && Button(picker,"Tab_2")==null,"interior controls replace gate controls");
+            Check(Button(picker,"PlanetCloudBtn")!=null && Button(picker,"PlanetDensityBtn")!=null,"weather controls in palm menu");
+            bool cloudsBefore=portal.cloudsEnabled;float densityBefore=portal.cloudDensity;
+            var weatherScale=portal.PlanetScale;
+            Press(picker,"PlanetCloudBtn");Check(portal.cloudsEnabled!=cloudsBefore,"cloud menu toggles off");
+            Press(picker,"PlanetCloudBtn");Check(portal.cloudsEnabled==cloudsBefore,"cloud menu toggles back");
+            portal.cloudDensity=1;Press(picker,"PlanetDensityBtn");Check(portal.cloudDensity==1.5f,"weather menu sets dense clouds");
+            Press(picker,"PlanetDensityBtn");Check(portal.cloudDensity==.5f,"weather menu sets sparse clouds");
+            Press(picker,"PlanetDensityBtn");Check(portal.cloudDensity==1,"weather menu restores normal clouds");
+            portal.cloudDensity=densityBefore;
+            Check(portal.PlanetScale==weatherScale && gate.transform.localScale==fixedScale,"weather controls preserve globe and gate scale");
             var headPose=head.transform.position;
             gate.Build(7,7);gate.Fit(8,8);gate.PlaceInOpening(Vector3.one*20,Vector3.forward);gate.FlipSide();
             gate.SetGateType(GateBuilder.GateKind.Sectional);gate.AnimateTo(0);gate.SetProgress(0);gate.SetWicketAngle(45);

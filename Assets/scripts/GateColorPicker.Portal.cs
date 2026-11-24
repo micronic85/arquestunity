@@ -4,7 +4,7 @@ using UnityEngine;
 public partial class GateColorPicker
 {
     GatePortal _portal;
-    TextMeshPro _portalToggleText,_portalWorldText,_portalAutoText;
+    TextMeshPro _portalToggleText,_portalWorldText,_portalAutoText,_portalCloudText,_portalDensityText;
     public bool PortalMenuVisible=>_menuVisible;
     public bool OwnsMenuRenderer(Renderer renderer)=>_menu && renderer.transform.IsChildOf(_menu);
     public void OnPortalTravelChanged(bool inside)
@@ -24,6 +24,12 @@ public partial class GateColorPicker
         y-=height+gap;
         PanelButton("PlanetResetBtn",new Vector3(0,y-height*.5f,0),width,height,
             out var reset,()=>{_portal.ResetEarth();RefreshPortalButtons();});reset.text="Сбросить Землю";
+        y-=height+gap;
+        PanelButton("PlanetCloudBtn",new Vector3(0,y-height*.5f,0),width,height,
+            out _portalCloudText,()=>{_portal.ToggleClouds();RefreshPortalButtons();});
+        y-=height+gap;
+        PanelButton("PlanetDensityBtn",new Vector3(0,y-height*.5f,0),width,height,
+            out _portalDensityText,()=>{_portal.CycleCloudDensity();RefreshPortalButtons();});
         RefreshPortalButtons();return y-height;
     }
 
@@ -61,6 +67,8 @@ public partial class GateColorPicker
 
     void RefreshPortalButtons()
     {
+        if(_portalCloudText && _portal)_portalCloudText.text=_portal.cloudsEnabled?"Облака: вкл":"Облака: выкл";
+        if(_portalDensityText && _portal)_portalDensityText.text="Облачность: "+(_portal.cloudDensity<.7f?"редкая":_portal.cloudDensity<1.2f?"обычная":"плотная");
         if(_portalAutoText && _portal)_portalAutoText.text=_portal.earthAutoSpin?"Автовращение: вкл":"Автовращение: выкл";
         if(_portalWorldText && _portal)
             _portalWorldText.text=_portal.worldKind==GatePortal.PortalWorldKind.Earth?"Внутри: Земля":"Внутри: Лофт";

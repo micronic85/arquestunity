@@ -7,6 +7,10 @@ CBUFFER_START(UnityPerMaterial)
     float4 _PortalInward;
     float4 _PortalSunPosition;
     float _SunAngularRadius;
+    float _CloudOffset;
+    float _CloudDensity;
+    float _EarthRadius;
+    float _NightIntensity;
     float _Reveal;
     float _ForegroundOffset;
     float _Halo;

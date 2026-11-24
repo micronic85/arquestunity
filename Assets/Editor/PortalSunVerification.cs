@@ -43,7 +43,7 @@ public static class PortalSunVerification
             Check(portal.WorldRoot.GetComponentsInChildren<Light>().Length==0,"no extra lights");
             Check(portal.WorldRoot.GetComponentsInChildren<Camera>().Length==0,"no extra world cameras");
             var surface=portal.EarthTransform.Find("EarthSurface");var material=surface.GetComponent<Renderer>().sharedMaterial;
-            Check(surface.GetComponent<MeshFilter>().sharedMesh==portal.earthMesh,"original Earth retained");
+            Check(surface.GetComponent<MeshFilter>().sharedMesh.triangles.Length==portal.earthMesh.triangles.Length*4,"original sphere refined");
             var position=portal.SunWorldPosition;
             var rotation=portal.EarthTransform.localRotation;
             portal.EarthTransform.Rotate(37,81,13);Tick();

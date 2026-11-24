@@ -609,7 +609,7 @@ public partial class GateColorPicker : MonoBehaviour
     {
         if (_tab != Tab.Measure) _manualEditing = false;
         _manualDraftText = null;
-        _portalToggleText = _portalWorldText = _portalAutoText = null;
+        _portalToggleText = _portalWorldText = _portalAutoText = _portalCloudText = _portalDensityText = null;
         Vector3 pos = _menu != null ? _menu.position : Vector3.zero;
         Quaternion rot = _menu != null ? _menu.rotation : Quaternion.identity;
         string status = _statusText != null ? _statusText.text : "";

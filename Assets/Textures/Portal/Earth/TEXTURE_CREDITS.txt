@@ -1,0 +1,31 @@
+Orbital Earth texture sources
+
+Cloud-free surface:
+NASA Blue Marble: Next Generation, July 2004, global base map.
+https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/
+Source: world.200407.3x21600x10800.jpg (21600 x 10800).
+Prepared EarthSurface_NASA_8K.jpg: resized to 8192 x 4096, JPEG quality 95.
+Credit: NASA Earth Observatory, Reto Stockli / Robert Simmon and the MODIS team.
+
+Night city lights:
+NASA Black Marble 2016, grayscale global map, 3 km.
+https://science.nasa.gov/earth/earth-observatory/earth-at-night/maps/
+Source: BlackMarble_2016_3km_gray.jpg (13500 x 6750).
+Prepared EarthNight_NASA_4K.png: resized to 4096 x 2048, single-channel PNG.
+Credit: NASA Earth Observatory / Joshua Stevens; Suomi NPP VIIRS data from Miguel Roman, NASA GSFC.
+The underlying datasets are historical composites, not live weather or current city activity.
+NASA imagery usage information: https://www.nasa.gov/nasa-brand-center/images-and-media/
+
+Clouds:
+Solar System Scope / INOVE, Earth Clouds, 8K equirectangular map.
+https://www.solarsystemscope.com/textures/
+https://www.solarsystemscope.com/textures/download/8k_earth_clouds.jpg
+License: Creative Commons Attribution 4.0 International.
+https://creativecommons.org/licenses/by/4.0/
+Prepared EarthClouds_SSS_8K.png: converted to a grayscale optical-density mask and retained
+at its original 8192 x 4096 resolution. Cloud movement, shading and shadows are simulated.
+Include this attribution when redistributing the application/assets.
+
+All maps use matching equirectangular longitude/latitude coordinates. No generative images
+or randomly placed cities are used. Existing imported Earth sphere is subdivided once for a smoother orbital horizon.
+Original downloads and SHA-256 manifest: D:/blender/chatgpt/earth-orbital/sources/.

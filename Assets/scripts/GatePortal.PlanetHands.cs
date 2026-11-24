@@ -46,7 +46,7 @@ public partial class GatePortal
     {
         if(!_earth){_lastEarthTime=now;return;}
         float dt=_lastEarthTime<0?0:Mathf.Max(0,now-_lastEarthTime);
-        _lastEarthTime=now;
+        _lastEarthTime=now;AdvanceClouds(Mathf.Min(dt,.1f));
         if(earthAutoSpin && !_planetScaling && !_leftPalmContact && !_rightPalmContact)
             _earth.localRotation=Quaternion.AngleAxis(dt*6,Vector3.up)*_earth.localRotation;
         UpdateEarthPose(Mathf.Min(dt,.1f));
