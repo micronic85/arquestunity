@@ -43,12 +43,12 @@ public partial class GatePortal : MonoBehaviour
     {
         UnityEngine.Rendering.RenderPipelineManager.beginCameraRendering-=BeforePortalCameraRender;
         if(_gate) _gate.Built-=OnGateBuilt;
-        ExitPortal(false);
+        ExitPortal(false);StopPortalAudio();
         if(_root) _root.gameObject.SetActive(false);
     }
     void Update()
     {
-        UpdatePortalTravel();Tick(Time.unscaledTime);UpdatePlanetHands();
+        UpdatePortalTravel();Tick(Time.unscaledTime);UpdatePlanetHands();UpdatePortalAudio(Time.unscaledDeltaTime);
     }
 
     public void SetPortalEnabled(bool value)
@@ -269,7 +269,7 @@ public partial class GatePortal : MonoBehaviour
 
     void OnDestroy()
     {
-        ExitPortal(false);
+        ExitPortal(false);StopPortalAudio();
         if(_root) Destroy(_root.gameObject);
         foreach(var mesh in _meshes)if(mesh)Destroy(mesh);
         foreach(var material in _materials)if(material)Destroy(material);

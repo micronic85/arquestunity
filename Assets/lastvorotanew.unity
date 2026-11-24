@@ -14028,6 +14028,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5da24f61b2faabf4385e0424945b601f, type: 3}
   m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::GatePortal
+  portalMusic: {fileID: 8300000, guid: 788f777b6ea95074ba464dc60eb8c74a, type: 3}
+  musicVolume: 0.7
+  musicNearDistance: 1
+  musicFarDistance: 8
+  musicDistantGain: 0.025
+  musicFadeSeconds: 0.5
   worldKind: 1
   earthMesh: {fileID: 4300000, guid: d103ffa837233534daa68d733386bac5, type: 3}
   earthTexture: {fileID: 2800000, guid: 19dcdc22008309643a435bfa15affdb9, type: 3}
