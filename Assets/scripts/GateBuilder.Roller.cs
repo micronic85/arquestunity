@@ -22,6 +22,10 @@ public partial class GateBuilder
     public float RollerActualPitch { get; private set; }
     public int RollerSlatCount { get; private set; }
 
+    // Root X=0 is the wall surface. All frame geometry sits in front of that surface.
+    const float RollerMountOffsetX = -.060f;
+    const float RollerCurtainThickness = .018f;
+
     readonly List<Mesh> _rollerMeshes = new List<Mesh>();
     Mesh _rollerCurtainMesh;
     Vector3[] _rollerClosedVertices, _rollerAnimatedVertices;
@@ -58,7 +62,7 @@ public partial class GateBuilder
         EnsureRollerMaterials();
 
         // Opaque housing with a folded front lower corner; the invisible roll is omitted.
-        float front = -.080f, back = front + box;
+        float back = -RollerMountOffsetX, front = back - box;
         RollerPrismObject("RollerPaint_Housing", _root, width, new[] {
             new Vector2(back, RollerClearHeight), new Vector2(front+.055f, RollerClearHeight),
             new Vector2(front, RollerClearHeight+.055f), new Vector2(front, RollerBoxTop),
@@ -150,6 +154,10 @@ public partial class GateBuilder
         var go = new GameObject(name,typeof(MeshFilter),typeof(MeshRenderer));
         go.transform.SetParent(parent,false);
         var mesh = data.Create(name);
+        var mountedVertices = mesh.vertices;
+        for (int i=0;i<mountedVertices.Length;i++) mountedVertices[i].x += RollerMountOffsetX;
+        mesh.vertices = mountedVertices;
+        mesh.RecalculateBounds();
         _rollerMeshes.Add(mesh);
         go.GetComponent<MeshFilter>().sharedMesh = mesh;
         go.GetComponent<MeshRenderer>().sharedMaterial = material;
@@ -232,13 +240,17 @@ public partial class GateBuilder
                 Face(new Vector3(a.x,a.y,-z),new Vector3(a.x,a.y,z),new Vector3(b.x,b.y,z),new Vector3(b.x,b.y,-z));
                 smoothNormals[frontStart]=normalA; smoothNormals[frontStart+1]=normalA;
                 smoothNormals[frontStart+2]=normalB; smoothNormals[frontStart+3]=normalB;
-                Face(new Vector3(.009f,a.y,z),new Vector3(.009f,a.y,-z),new Vector3(.009f,b.y,-z),new Vector3(.009f,b.y,z));
-                Face(new Vector3(a.x,a.y,-z),new Vector3(b.x,b.y,-z),new Vector3(.009f,b.y,-z),new Vector3(.009f,a.y,-z));
-                Face(new Vector3(a.x,a.y,z),new Vector3(.009f,a.y,z),new Vector3(.009f,b.y,z),new Vector3(b.x,b.y,z));
+                int backStart=vertices.Count;
+                Face(new Vector3(a.x+RollerCurtainThickness,a.y,z),new Vector3(a.x+RollerCurtainThickness,a.y,-z),
+                    new Vector3(b.x+RollerCurtainThickness,b.y,-z),new Vector3(b.x+RollerCurtainThickness,b.y,z));
+                smoothNormals[backStart]=-normalA; smoothNormals[backStart+1]=-normalA;
+                smoothNormals[backStart+2]=-normalB; smoothNormals[backStart+3]=-normalB;
+                Face(new Vector3(a.x,a.y,-z),new Vector3(b.x,b.y,-z),new Vector3(b.x+RollerCurtainThickness,b.y,-z),new Vector3(a.x+RollerCurtainThickness,a.y,-z));
+                Face(new Vector3(a.x,a.y,z),new Vector3(a.x+RollerCurtainThickness,a.y,z),new Vector3(b.x+RollerCurtainThickness,b.y,z),new Vector3(b.x,b.y,z));
             }
             var bottom=profile[0];var top=profile[profile.Count-1];
-            Face(new Vector3(bottom.x,bottom.y,-z),new Vector3(.009f,bottom.y,-z),new Vector3(.009f,bottom.y,z),new Vector3(bottom.x,bottom.y,z));
-            Face(new Vector3(top.x,top.y,-z),new Vector3(top.x,top.y,z),new Vector3(.009f,top.y,z),new Vector3(.009f,top.y,-z));
+            Face(new Vector3(bottom.x,bottom.y,-z),new Vector3(bottom.x+RollerCurtainThickness,bottom.y,-z),new Vector3(bottom.x+RollerCurtainThickness,bottom.y,z),new Vector3(bottom.x,bottom.y,z));
+            Face(new Vector3(top.x,top.y,-z),new Vector3(top.x,top.y,z),new Vector3(top.x+RollerCurtainThickness,top.y,z),new Vector3(top.x+RollerCurtainThickness,top.y,-z));
         }
 
         public void Box(Vector3 center,Vector3 size)

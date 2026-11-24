@@ -67,6 +67,13 @@ public static class RollerGateVerification
                 Check(mover.IsPlacementLocked,"Fit did not lock roller placement.");
                 Check(builder.Root.GetComponentsInChildren<Renderer>(true).Count(r=>r.enabled)<=8,"Too many roller renderers.");
                 var curtain=builder.Root.Find("RollerPaint_Curtain").GetComponent<MeshFilter>().sharedMesh;
+                var housing=builder.Root.Find("RollerPaint_Housing").GetComponent<MeshFilter>().sharedMesh.bounds;
+                Check(Mathf.Abs(housing.max.x)<.00001f,"Housing back is not on the wall plane.");
+                foreach(var guide in builder.Root.GetComponentsInChildren<MeshFilter>().Where(f=>f.name.StartsWith("RollerPaint_Guide_")))
+                    Check(Mathf.Abs(guide.sharedMesh.bounds.max.x-housing.max.x)<.00001f,"Guide and housing mounting planes differ.");
+                var backVertices=curtain.vertices.Where((v,index)=>curtain.normals[index].x>.7f).ToArray();
+                Check(backVertices.Length>0 && backVertices.Max(v=>v.x)-backVertices.Min(v=>v.x)>.006f,
+                    "The inside of the curtain is flat instead of profiled.");
                 Check(curtain.vertexCount<20000,"Curtain mesh is unexpectedly dense.");
                 Check(curtain.tangents.Length==curtain.vertexCount,"Shader tangents are missing.");
                 Check(curtain.normals.All(n=>float.IsFinite(n.x)&&float.IsFinite(n.y)&&float.IsFinite(n.z)),"Invalid curtain normals.");
@@ -98,10 +105,11 @@ public static class RollerGateVerification
                         if (joint>builder.RollerClearHeight-.005f) continue;
                         foreach (float across in new[]{-.45f,0,.45f})
                             foreach (float slope in new[]{-.35f,0,.35f})
+                            foreach (float side in new[]{-1f,1f})
                             {
-                                var target=builder.Root.TransformPoint(new Vector3(-.008f,joint,builder.RollerClearWidth*across));
-                                var direction=builder.Root.TransformDirection(new Vector3(1,slope,0)).normalized;
-                                Check(collider.Raycast(new Ray(target-direction*.3f,direction),out _,.6f),"Light gap between lamellas.");
+                                var target=builder.Root.TransformPoint(new Vector3(-.068f,joint,builder.RollerClearWidth*across));
+                                var direction=builder.Root.TransformDirection(new Vector3(side,slope,0)).normalized;
+                                Check(collider.Raycast(new Ray(target-direction*.3f,direction),out _,.6f),"Light gap between lamellas (outside or inside).");
                                 rayChecks++;
                             }
                     }
@@ -122,7 +130,7 @@ public static class RollerGateVerification
             Check(Mathf.Abs(builder.Progress-movingProgress)<.0001f,"Switch from a moving roller lost opening state.");
             Check((int)Field(picker,"_selected")==color,"Switch back lost color.");
             Check(builder.handleObject && builder.handleObject.IsChildOf(builder.Root),"Handle was lost when switching back.");
-            string report=$"Roller integration passed: {checks} checks, including {rayChecks} seam rays; 3 sizes, menu switching, color, fitting lock, handle, opening and return to sectional.\n";
+            string report=$"Roller integration passed: {checks} checks, including {rayChecks} seam rays; 3 sizes, menu switching, color, fitting lock, handle, opening, common wall mounting plane, two-sided lamella profile and return to sectional.\n";
             File.AppendAllText("D:/blender/chatgpt/unity-maintenance-report.txt",report);
             Debug.Log(report);
         }
@@ -195,7 +203,19 @@ public static class RollerGateVerification
                 RenderTexture.active=rt; image.ReadPixels(new Rect(0,0,1000,900),0,0); image.Apply();
                 File.WriteAllBytes("D:/blender/chatgpt/unity_roller_"+sample.Item2+".png",image.EncodeToPNG());
             }
-            Debug.Log("Saved closed/half/open roller previews to D:/blender/chatgpt.");
+            builder.SetProgress(0);
+            camera.transform.position=builder.Root.TransformPoint(new Vector3(6.2f,2.25f,-1.6f));
+            camera.transform.LookAt(center,Vector3.up);
+            keyObject.transform.rotation=Quaternion.LookRotation(builder.Root.TransformDirection(new Vector3(-1,-.8f,.3f)));
+            fillObject.transform.rotation=Quaternion.LookRotation(builder.Root.TransformDirection(new Vector3(-.7f,-.4f,-.8f)));
+            camera.Render(); RenderTexture.active=rt; image.ReadPixels(new Rect(0,0,1000,900),0,0); image.Apply();
+            File.WriteAllBytes("D:/blender/chatgpt/unity_roller_inside.png",image.EncodeToPNG());
+            camera.orthographic=true; camera.orthographicSize=1.55f;
+            camera.transform.position=builder.Root.TransformPoint(new Vector3(-.15f,1.33f,6));
+            camera.transform.LookAt(builder.Root.TransformPoint(new Vector3(-.15f,1.33f,0)),Vector3.up);
+            camera.Render(); RenderTexture.active=rt; image.ReadPixels(new Rect(0,0,1000,900),0,0); image.Apply();
+            File.WriteAllBytes("D:/blender/chatgpt/unity_roller_mount_side.png",image.EncodeToPNG());
+            Debug.Log("Saved outside, inside, side and opening roller previews to D:/blender/chatgpt.");
         }
         finally
         {
