@@ -65,6 +65,18 @@ public static class PortalEntryVerification
             gate.SetWicketAngle(0);gate.StopAnimation();gate.SetGateType(GateBuilder.GateKind.Roller);gate.Build(3.5f,2.65f);
             gate.transform.localScale=Vector3.one*1.15f;mover.SetPlacementLocked(false);
             portal.SetWorldKind(GatePortal.PortalWorldKind.Earth);portal.SetPortalEnabled(true);gate.SetProgress(1);Tick();
+            foreach(var sample in new[]{(2f,2f,.75f),(3.5f,2.65f,1f),(5f,4.5f,1.4f)})
+            {
+                gate.Build(sample.Item1,sample.Item2);gate.transform.localScale=Vector3.one*sample.Item3;Tick();
+                var p=portal.EarthTransform.position;float r=portal.PlanetRadius;
+                Call(portal,"LoseTravelTracking");Head(-.2f);Head(.07f);Call(portal,"UpdateEarthPose",1f);
+                Check(portal.IsInside && Vector3.Distance(p,portal.EarthTransform.position)<.001f
+                    &&Mathf.Abs(r-portal.PlanetRadius)<.001f,"entry continuity for gate size/scale "+sample);
+                Head(-.1f);Call(portal,"UpdateEarthPose",1f);
+                Check(!portal.IsInside && Vector3.Distance(p,portal.EarthTransform.position)<.001f
+                    &&Mathf.Abs(r-portal.PlanetRadius)<.001f,"exit continuity for gate size/scale "+sample);
+            }
+            gate.Build(3.5f,2.65f);gate.transform.localScale=Vector3.one*1.15f;Tick();
             Check(!ShaderUtil.ShaderHasError(portal.worldShader)&&!ShaderUtil.ShaderHasError(portal.maskShader)
                 &&!ShaderUtil.ShaderHasError(portal.energyShader),"shader compile");
             Call(portal,"LoseTravelTracking");Head(.1f);Head(.2f);
@@ -85,7 +97,10 @@ public static class PortalEntryVerification
             Check(!portal.IsInside,"entry hysteresis rejects head jitter");
             var fixedPos=gate.transform.position;var fixedRot=gate.transform.rotation;var fixedScale=gate.transform.localScale;
             bool grab=controller.handleGrab && controller.handleGrab.enabled,handGrab=controller.handleHandGrab && controller.handleHandGrab.enabled;
-            Head(.07f);
+            var overviewPosition=portal.EarthTransform.position;float overviewRadius=portal.PlanetRadius;
+            Head(.07f);Call(portal,"UpdateEarthPose",1f);
+            Check(!portal.EarthInHandMode && Vector3.Distance(overviewPosition,portal.EarthTransform.position)<.001f
+                &&Mathf.Abs(overviewRadius-portal.PlanetRadius)<.001f,"entry preserves Earth world position and radius");
             Check(portal.IsInside,"entry through open circle");
             Check(gate.IsPortalInteractionLocked && mover.PortalSuspended,"separate gate suspension");
             Check(!mover.IsPlacementLocked && !mover.CanMove && !mover.CanRotate && !mover.CanScale,"original unlocked state retained but ineffective");
@@ -118,9 +133,17 @@ public static class PortalEntryVerification
             Head(.07f,side);Head(-.07f,side);
             Check(portal.IsInside,"crossing outside circle does not exit space");
             Head(.07f,side);for(float z=side;z>0;z-=.2f)Head(.07f,z);Head(.07f);
-            Call(portal,"UpdateEarthPose",1f);
-            Check(Mathf.Abs(portal.PlanetRadius-portal.insideEarthRadius)<.001f,"reachable globe has physical size independent of gate scale");
+            Check(Button(picker,"PlanetHandBtn")!=null,"explicit hand interaction button exists");
+            Press(picker,"PlanetHandBtn");Call(portal,"UpdateEarthPose",1f);
+            Check(portal.EarthInHandMode && Mathf.Abs(portal.PlanetRadius-portal.insideEarthRadius)<.001f,"explicit approach gives reachable globe independent of gate scale");
             Check(Vector3.Distance(head.transform.position,portal.EarthTransform.position)<.85f,"globe within arm reach");
+            float handRadius=portal.PlanetRadius;var handPosition=portal.EarthTransform.position;
+            Head(-.1f);Call(portal,"UpdateEarthPose",1f);
+            Check(!portal.IsInside && portal.EarthInHandMode && Mathf.Abs(portal.PlanetRadius-handRadius)<.001f
+                &&Vector3.Distance(handPosition,portal.EarthTransform.position)<.001f,"exit also preserves explicit hand-mode pose");
+            Head(-.2f);Head(.07f);Call(portal,"UpdateEarthPose",1f);
+            Check(portal.IsInside && portal.EarthInHandMode && Mathf.Abs(portal.PlanetRadius-handRadius)<.001f
+                &&Vector3.Distance(handPosition,portal.EarthTransform.position)<.001f,"reentry preserves selected hand-mode pose");
             Neutral();var neutral=new GatePortal.PlanetHandSample{tracked=true};
             var direction=-portal.VisualRoot.right;var q=portal.EarthTransform.rotation;
             Hands(Palm(direction),neutral);Hands(Palm(Quaternion.AngleAxis(20,Vector3.up)*direction),neutral);
@@ -142,6 +165,10 @@ public static class PortalEntryVerification
             Hands(Point(-.26f),Point(.26f));Check(portal.PlanetScale==portal.planetMaxScale,"maximum globe scale");
             foreach(float span in new[]{.4f,.28f,.16f,.08f})Hands(Point(-span*.5f),Point(span*.5f));
             Check(portal.PlanetScale==portal.planetMinScale,"minimum globe scale");
+            float chosenRadius=portal.PlanetRadius,chosenScale=portal.PlanetScale;
+            Head(-.1f);Head(-.2f);Head(.07f);Call(portal,"UpdateEarthPose",1f);
+            Check(portal.IsInside && Mathf.Abs(portal.PlanetScale-chosenScale)<.001f && Mathf.Abs(portal.PlanetRadius-chosenRadius)<.001f,
+                "finger-selected scale survives exit and reentry");
             Check(gate.transform.localScale==fixedScale && gate.transform.position==fixedPos,"finger gesture never scales or moves gates");
             Hands(default,default);Hands(Point(-.14f),Point(.14f),.3f);
             Check(!portal.IsPlanetScaling,"tracking recovery needs gesture release");
@@ -160,7 +187,12 @@ public static class PortalEntryVerification
             Capture(portal,Check);
             for(int i=0;i<3;i++){Head(-.02f);Head(.02f);}
             Check(portal.IsInside,"exit hysteresis rejects jitter");
-            Head(-.1f);
+            Press(picker,"PlanetHandBtn");Call(portal,"UpdateEarthPose",1f);
+            Check(!portal.EarthInHandMode && Vector3.Distance(overviewPosition,portal.EarthTransform.position)<.001f
+                &&Mathf.Abs(overviewRadius-portal.PlanetRadius)<.001f,"return-to-distance restores overview pose");
+            Head(-.1f);Call(portal,"UpdateEarthPose",1f);
+            Check(Vector3.Distance(overviewPosition,portal.EarthTransform.position)<.001f
+                &&Mathf.Abs(overviewRadius-portal.PlanetRadius)<.001f,"exit preserves overview Earth scale");
             Check(!portal.IsInside && !mover.PortalSuspended && !gate.IsPortalInteractionLocked,"return through portal releases suspension");
             Check(roomRenderer.enabled && !disabledRenderer.enabled,"room renderer states restored exactly");
             Check(!mover.IsPlacementLocked && mover.CanScale,"unlocked placement state restored");
@@ -229,6 +261,13 @@ public static class PortalEntryVerification
             camera.transform.LookAt(center,Vector3.up);var back=Render("return_window_alpha");
             check(back[450*900+450].a<5,"return window has transparent alpha for live passthrough");
             check(back[80*900+80].a>245,"virtual sky surrounds the return window");
+            var smoke=portal.VisualRoot.GetComponentsInChildren<Renderer>().Where(r=>r.sharedMaterial.shader==portal.energyShader).ToArray();
+            foreach(var r in smoke)r.enabled=false;
+            var softWindow=Render("return_window_soft_edge");
+            var edge=camera.WorldToViewportPoint(center+portal.VisualRoot.forward*radius*.98f);
+            int edgePixel=Mathf.Clamp((int)(edge.y*900),0,899)*900+Mathf.Clamp((int)(edge.x*900),0,899);
+            check(softWindow[edgePixel].a>10 && softWindow[edgePixel].a<240,"return window edge blends room and space without a hard cut");
+            foreach(var r in smoke)r.enabled=true;
             portal.EarthTransform.gameObject.SetActive(true);
             camera.transform.LookAt(portal.EarthTransform.position,Vector3.up);
             var foreground=Render("return_with_foreground_globe");

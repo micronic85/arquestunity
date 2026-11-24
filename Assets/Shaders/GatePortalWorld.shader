@@ -66,6 +66,7 @@ Shader "VorotaKraft/PortalWorld"
             half4 frag(V input,bool front:SV_IsFrontFace):SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);PortalClipWorld(input.positionWS);
+                float visibility=_Reveal*PortalWorldOpacity(input.positionWS);clip(visibility-.001);
                 if(_BakedWorld>.5 && _BakedWorld<1.5)
                 {
                     half3 background=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,input.uv).rgb;
@@ -84,7 +85,7 @@ Shader "VorotaKraft/PortalWorld"
                         background=lerp(background,half3(1,.95,.78),disk);
                         background+=half3(1,.55,.16)*(halo+corona)*(1-disk);
                     }
-                    return half4(background,_Reveal);
+                    return half4(background,visibility);
                 }
                 if(_BakedWorld>1.5)
                 {
@@ -104,13 +105,13 @@ Shader "VorotaKraft/PortalWorld"
                         lighting*=1+relief;
                         half dusk=smoothstep(-.12,.02,sunFacing)*(1-smoothstep(.02,.24,sunFacing));
                         lighting+=half3(.12,.045,.012)*dusk;
-                        return half4(lighting,pow(cloud,.7)*.95*_Reveal);
+                        return half4(lighting,pow(cloud,.7)*.95*visibility);
                     }
                     if(_BakedWorld>2.5)
                     {
                         clip(front?1:-1);
                         half daylight=smoothstep(-.15,.35,sunFacing);
-                        half glow=pow(1-saturate(dot(n,view)),3.5)*lerp(.10,.65,daylight)*_Reveal;
+                        half glow=pow(1-saturate(dot(n,view)),3.5)*lerp(.10,.65,daylight)*visibility;
                         clip(glow-.003);
                         return half4(.05,.40,1.0,glow);
                     }
@@ -133,14 +134,14 @@ Shader "VorotaKraft/PortalWorld"
                     half lights=SAMPLE_TEXTURE2D(_NightMap,sampler_NightMap,input.uv).r;
                     half night=1-smoothstep(-.18,.08,sunFacing);
                     half3 cities=half3(1,.62,.24)*pow(saturate(lights-.008),.75)*_NightIntensity*night;
-                    return half4((surface*diffuse+spec)*(1-shadow)+cities,_Reveal);
+                    return half4((surface*diffuse+spec)*(1-shadow)+cities,visibility);
                 }
                 float3 normal=normalize(input.normalWS)*(front?1:-1);
                 half light=.30+.70*saturate(dot(normal,normalize(float3(-.4,.8,.3))));
                 half3 color=input.color.rgb*(light+input.color.a*1.7);
                 float depth=max(0,dot(input.positionWS-_PortalCenter.xyz,_PortalInward.xyz));
                 color=lerp(color,half3(.015,.055,.12),saturate(depth*.025));
-                return half4(color,_Reveal);
+                return half4(color,visibility);
             }
             ENDHLSL
         }

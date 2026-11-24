@@ -11,6 +11,19 @@ public partial class GatePortal
     public float PlanetRadius=>_earth?1.55f*Mathf.Abs(_earth.lossyScale.y):0;
     public Transform EarthTransform=>_earth;
     public bool IsPlanetScaling=>_planetScaling;
+    public bool EarthInHandMode=>_earthHandMode;
+    bool _earthHandMode;
+
+    public void ToggleEarthHandMode()
+    {
+        if(!IsInside)return;
+        ResolveTravelReferences();
+        if(!_travelHead || !_world)return;
+        _earthHandMode=!_earthHandMode;
+        if(_earthHandMode)
+            _insideEarthPosition=_world.InverseTransformPoint(_travelHead.position+_root.right*.72f-Vector3.up*.14f);
+        ResetPlanetGesture(true);
+    }
 
     public struct PlanetHandSample
     {
@@ -55,12 +68,12 @@ public partial class GatePortal
     void UpdateEarthPose(float dt)
     {
         if(!_earth)return;
-        _earthBlend=Mathf.MoveTowards(_earthBlend,IsInside?1:0,dt/.45f);
+        _earthBlend=Mathf.MoveTowards(_earthBlend,_earthHandMode?1:0,dt/.45f);
         float blend=Mathf.SmoothStep(0,1,_earthBlend);
         float worldScale=Mathf.Max(.001f,Mathf.Abs(_world.lossyScale.y));
         float localScale=insideEarthRadius*PlanetScale/(1.55f*worldScale);
         _earth.localPosition=Vector3.Lerp(new Vector3(4.8f,0,0),_insideEarthPosition,blend);
-        _earth.localScale=Vector3.one*Mathf.Lerp(1,localScale,blend);
+        _earth.localScale=Vector3.one*Mathf.Lerp(PlanetScale,localScale,blend);
     }
 
     void ResetPlanetGesture(bool requireRelease)

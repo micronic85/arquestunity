@@ -75,7 +75,7 @@ public partial class GatePortal
 
     void BuildEarthWorld()
     {
-        _lastEarthTime=-1;_earthBlend=0;ResetPlanetGesture(true);
+        _lastEarthTime=-1;_earthBlend=0;_earthHandMode=false;ResetPlanetGesture(true);
         _worldMaterial.SetFloat("_BakedWorld",1);_worldMaterial.SetTexture("_BaseMap",spaceTexture);
         var background=new MeshData();
         background.Box(new Vector3(10,0,0),new Vector3(36,30,36),Color.white);

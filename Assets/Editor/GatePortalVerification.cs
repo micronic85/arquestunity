@@ -178,7 +178,7 @@ public static class GatePortalVerification
                 int diff=Math.Abs(full[i].r-empty[i].r)+Math.Abs(full[i].g-empty[i].g)+Math.Abs(full[i].b-empty[i].b);
                 if(diff<=10)continue;
                 changed++;
-                if(Vector2.Distance(new Vector2(x+.5f,y+.5f),new Vector2(screenCenter.x,screenCenter.y))>radius+3)outside++;
+                if(Vector2.Distance(new Vector2(x+.5f,y+.5f),new Vector2(screenCenter.x,screenCenter.y))>radius*1.09f+3)outside++;
             }
             check(changed>10000,"world is visible through aperture");check(outside==0,"world cannot leak outside aperture: "+outside);
             var smoke=portal.VisualRoot.GetComponentsInChildren<Renderer>()

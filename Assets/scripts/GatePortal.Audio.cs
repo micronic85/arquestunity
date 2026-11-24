@@ -10,6 +10,8 @@ public partial class GatePortal
     [Range(0,1)] public float musicDistantGain=.025f;
     [Min(.05f)] public float musicFadeSeconds=.5f;
     AudioSource _portalAudio;
+    bool _audioLoadRequested,_audioStartRequested,_audioLoadFailed;
+    float _nextAudioRetry;
 
     public float MusicGainAtDistance(float distance)
     {
@@ -31,23 +33,46 @@ public partial class GatePortal
             _portalAudio=node.AddComponent<AudioSource>();
             _portalAudio.playOnAwake=false;_portalAudio.loop=true;_portalAudio.spatialBlend=0;
             _portalAudio.dopplerLevel=0;_portalAudio.volume=0;
+            _portalAudio.spatialize=false;_portalAudio.mute=false;_portalAudio.priority=64;
         }
         if(_root)_portalAudio.transform.position=_root.position;
         if(_portalAudio.clip!=portalMusic)
         {
             _portalAudio.Stop();_portalAudio.clip=portalMusic;_portalAudio.volume=0;
+            _audioLoadRequested=_audioStartRequested=_audioLoadFailed=false;
         }
         ResolveTravelReferences();
         float target=audible && _travelHead
             ?musicVolume*Reveal*MusicGainAtDistance(Vector3.Distance(_travelHead.position,_root.position)):0;
-        if(target>0 && !_portalAudio.isPlaying)_portalAudio.Play();
+        if(target>0 && portalMusic)
+        {
+            if(portalMusic.loadState==AudioDataLoadState.Unloaded && !_audioLoadRequested)
+            {
+                _audioLoadRequested=true;portalMusic.LoadAudioData();
+            }
+            if(portalMusic.loadState==AudioDataLoadState.Loaded)
+            {
+                float now=Time.realtimeSinceStartup;
+                if(_portalAudio.isPlaying)_nextAudioRetry=now+2;
+                else if(!_audioStartRequested || (now>=_nextAudioRetry && !AudioListener.pause))
+                {
+                    // A pending mobile decoder must not be restarted on every Update.
+                    _audioStartRequested=true;_nextAudioRetry=now+2;_portalAudio.Play();
+                }
+            }
+            else if(portalMusic.loadState==AudioDataLoadState.Failed && !_audioLoadFailed)
+            {
+                _audioLoadFailed=true;Debug.LogWarning("Portal music could not load: "+portalMusic.name,this);
+            }
+        }
         _portalAudio.volume=Mathf.MoveTowards(_portalAudio.volume,target,Mathf.Max(0,dt)/Mathf.Max(.05f,musicFadeSeconds));
-        if(target<=0 && _portalAudio.volume<=.0001f)_portalAudio.Stop();
+        if(target<=0 && _portalAudio.volume<=.0001f)StopPortalAudio();
     }
 
     void StopPortalAudio()
     {
         if(!_portalAudio)return;
         _portalAudio.Stop();_portalAudio.volume=0;
+        _audioStartRequested=false;
     }
 }

@@ -4,20 +4,23 @@ using UnityEngine;
 public partial class GateColorPicker
 {
     GatePortal _portal;
-    TextMeshPro _portalToggleText,_portalWorldText,_portalAutoText,_portalCloudText,_portalDensityText;
+    TextMeshPro _portalToggleText,_portalWorldText,_portalAutoText,_portalCloudText,_portalDensityText,_portalHandText;
     public bool PortalMenuVisible=>_menuVisible;
     public bool OwnsMenuRenderer(Renderer renderer)=>_menu && renderer.transform.IsChildOf(_menu);
     public void OnPortalTravelChanged(bool inside)
     {
         _tab=Tab.Gate;
         if(_menu)RebuildMenu();
-        SetStatus(inside?"Космос · Земля управляется руками":"Вы в реальной комнате");
+        SetStatus(inside?"Космос · приблизьте Землю через меню":"Вы в реальной комнате");
     }
 
     float BuildPortalInteriorButtons(float y,float width,float height,float gap)
     {
         PanelButton("PortalReturnBtn",new Vector3(0,y-height*.5f,0),width,height,
             out var back,()=>_portal.ReturnToRoom());back.text="Вернуться в комнату";
+        y-=height+gap;
+        PanelButton("PlanetHandBtn",new Vector3(0,y-height*.5f,0),width,height,
+            out _portalHandText,()=>{_portal.ToggleEarthHandMode();RefreshPortalButtons();});
         y-=height+gap;
         PanelButton("PlanetAutoBtn",new Vector3(0,y-height*.5f,0),width,height,
             out _portalAutoText,()=>{_portal.SetEarthAutoSpin(!_portal.earthAutoSpin);RefreshPortalButtons();});
@@ -67,6 +70,7 @@ public partial class GateColorPicker
 
     void RefreshPortalButtons()
     {
+        if(_portalHandText && _portal)_portalHandText.text=_portal.EarthInHandMode?"Вернуть Землю вдаль":"Землю к рукам";
         if(_portalCloudText && _portal)_portalCloudText.text=_portal.cloudsEnabled?"Облака: вкл":"Облака: выкл";
         if(_portalDensityText && _portal)_portalDensityText.text="Облачность: "+(_portal.cloudDensity<.7f?"редкая":_portal.cloudDensity<1.2f?"обычная":"плотная");
         if(_portalAutoText && _portal)_portalAutoText.text=_portal.earthAutoSpin?"Автовращение: вкл":"Автовращение: выкл";

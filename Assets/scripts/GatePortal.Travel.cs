@@ -128,7 +128,7 @@ public partial class GatePortal
         _gate.SetPortalInteractionLock(true);
         if(_travelMover)_travelMover.SetPortalSuspended(true);
         IsInside=true;_pendingEntry=false;_pendingExit=false;
-        _insideEarthPosition=_world.InverseTransformPoint(headPosition+_root.right*.72f-Vector3.up*.14f);
+        // Hand/overview mode is changed only by its explicit menu command, never by crossing.
         ResetPlanetGesture(true);
         NotifyTravelMenu();HideRoomRenderers();
     }

@@ -18,14 +18,14 @@ public static class PortalMusicSetup
         if(!importer)throw new InvalidOperationException("Portal music file is missing.");
         importer.forceToMono=false;importer.loadInBackground=true;
         var settings=importer.defaultSampleSettings;
-        settings.preloadAudioData=false;settings.loadType=AudioClipLoadType.Streaming;settings.compressionFormat=AudioCompressionFormat.Vorbis;
+        settings.preloadAudioData=true;settings.loadType=AudioClipLoadType.CompressedInMemory;settings.compressionFormat=AudioCompressionFormat.Vorbis;
         settings.quality=.7f;settings.sampleRateSetting=AudioSampleRateSetting.OptimizeSampleRate;
         importer.defaultSampleSettings=settings;importer.SetOverrideSampleSettings("Android",settings);importer.SaveAndReimport();
         var portal=Object.FindFirstObjectByType<GatePortal>();
         Undo.RecordObject(portal,"Install distance-controlled portal music");
         portal.portalMusic=AssetDatabase.LoadAssetAtPath<AudioClip>(ClipPath);
         EditorUtility.SetDirty(portal);EditorSceneManager.MarkSceneDirty(scene);EditorSceneManager.SaveScene(scene);
-        Debug.Log($"Portal music installed: {portal.portalMusic.length:F1} s; stereo streaming; near 1 m, distant 8 m.");
+        Debug.Log($"Portal music installed: {portal.portalMusic.length:F1} s; preloaded compressed stereo; near 1 m, distant 8 m.");
     }
 
     [MenuItem("Tools/AR Gates/Verify Portal Music In Play Mode")]
@@ -44,7 +44,8 @@ public static class PortalMusicSetup
         {
             Check(portal.portalMusic && portal.portalMusic.length>30,"installed track");
             var importer=(AudioImporter)AssetImporter.GetAtPath(ClipPath);
-            Check(importer.GetOverrideSampleSettings("Android").loadType==AudioClipLoadType.Streaming,"Android streaming");
+            Check(importer.GetOverrideSampleSettings("Android").loadType==AudioClipLoadType.CompressedInMemory
+                &&importer.GetOverrideSampleSettings("Android").preloadAudioData,"Android compressed audio preloaded");
             portal.headOverride=head.transform;portal.appearanceDuration=0;gate.SetProgress(1);portal.SetPortalEnabled(true);
             float previous=1;
             for(int i=0;i<=16;i++){float gain=portal.MusicGainAtDistance(i*.5f);Check(gain<=previous && gain>0,"monotonic attenuation");previous=gain;}
@@ -66,7 +67,7 @@ public static class PortalMusicSetup
             gate.SetProgress(1);Call("Tick",Time.unscaledTime);Call("UpdatePortalAudio",1f);
             portal.enabled=false;Check(!audio.isPlaying && audio.volume==0,"component disable stops music");portal.enabled=true;
             Check(portal.GetComponentsInChildren<AudioSource>(true).Length==1,"no duplicate music sources");
-            Debug.Log($"Portal music: {count} checks passed; distance gain, both sides, streaming, loop, fade and lifecycle.");
+            Debug.Log($"Portal music: {count} checks passed; distance gain, both sides, compressed preload, loop, fade and lifecycle.");
         }
         finally
         {

@@ -128,7 +128,8 @@ public partial class GatePortal : MonoBehaviour
         _materials.AddRange(new[]{_maskMaterial,_worldMaterial,_rimMaterial,_haloMaterial});
         _root=new GameObject("GatePortalVisual").transform;_root.SetParent(transform,false);
         _mask=Create("ApertureMask",Disk(),_root,_maskMaterial);
-        _rim=Create("RotatingSmokeCloud",SmokeCloud(),_root,_rimMaterial);
+        _rimMaterial.SetFloat("_Halo",1);
+        _rim=Create("RotatingSmokeCloud",SmokePuffs(),_root,_rimMaterial);
         _halo=Create("VolumetricSmokePuffs",SmokePuffs(),_root,_haloMaterial);
         BuildWorld();
         PlacePortal();
@@ -196,30 +197,6 @@ public partial class GatePortal : MonoBehaviour
             data.Face(Color.white,Vector3.zero,new Vector3(0,Mathf.Sin(a),Mathf.Cos(a)),new Vector3(0,Mathf.Sin(b),Mathf.Cos(b)));
         }
         return data.Build("Portal mask disk");
-    }
-
-    // Curved body plus smoke puffs distributed through a toroidal volume.
-    // The inner aperture stays clear; the outer boundary is feathered by the smoke shader.
-    static Mesh SmokeCloud()
-    {
-        var data=new MeshData();const int around=128,across=12;
-        for(int i=0;i<around;i++)for(int j=0;j<across;j++)
-        {
-            int start=data.vertices.Count;
-            for(int k=0;k<4;k++)
-            {
-                int ia=i+(k==1||k==2?1:0),ja=j+(k>=2?1:0);
-                float angle=ia*2*Mathf.PI/around,t=(float)ja/across;
-                float radius=Mathf.Lerp(.70f,1.28f,t);
-                float x=-.015f+.16f*Mathf.Sin(t*Mathf.PI)
-                    +.035f*Mathf.Sin(angle*5)+.02f*Mathf.Sin(angle*9+t*Mathf.PI);
-                data.vertices.Add(new Vector3(x,Mathf.Sin(angle)*radius,Mathf.Cos(angle)*radius));
-                data.uv.Add(new Vector2(Mathf.Cos(angle)*radius,Mathf.Sin(angle)*radius));
-                data.colors.Add(Color.white);
-            }
-            data.Quad(start);
-        }
-        return data.Build("Portal curved smoke cloud");
     }
 
     // Puffs straddle the mounting plane instead of sitting behind a thin front sheet.

@@ -68,7 +68,8 @@ void PortalClipWorld(float3 positionWS)
     float3 hit=lerp(eye,positionWS,t);
     float3 lateral=hit-_PortalCenter.xyz;
     lateral-=_PortalInward.xyz*dot(lateral,_PortalInward.xyz);
-    bool aperture=dot(lateral,lateral)<_PortalRadius*_PortalRadius;
+    float radial=length(lateral);
+    bool aperture=radial<_PortalRadius*.88;
     if(inside)
     {
         // Only geometry beyond the return window is cut away. Foreground hands/planet remain visible.
@@ -76,7 +77,24 @@ void PortalClipWorld(float3 positionWS)
         return;
     }
     clip(-cameraSide+.001);clip(fragmentSide-.001);
-    if(t<0 || t>1 || !aperture)clip(-1);
+    if(t<0 || t>1 || radial>_PortalRadius*1.08)clip(-1);
     clip(PortalForegroundVisibility(hit)-.5);
+}
+// Blend only fragments across the aperture, keeping foreground planet geometry intact.
+float PortalWorldOpacity(float3 positionWS)
+{
+    if(_PortalTravel<.5)return 1;
+    float3 eye=GetCameraPositionWS();
+    float cameraSide=dot(eye-_PortalCenter.xyz,_PortalInward.xyz);
+    float fragmentSide=dot(positionWS-_PortalCenter.xyz,_PortalInward.xyz);
+    float denominator=cameraSide-fragmentSide;
+    float t=abs(denominator)>.000001?cameraSide/denominator:-1;
+    if(t<0 || t>1)return 1;
+    float3 hit=lerp(eye,positionWS,t)-_PortalCenter.xyz;
+    hit-=_PortalInward.xyz*dot(hit,_PortalInward.xyz);
+    float radial=length(hit)/max(_PortalRadius,.001);
+    if(PortalInsideView())
+        return cameraSide>=0 && fragmentSide<0?smoothstep(.88,1.08,radial):1;
+    return 1-smoothstep(.88,1.08,radial);
 }
 #endif
