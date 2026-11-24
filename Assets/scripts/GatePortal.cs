@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>Optional stereoscopic portal window behind either gate type. Baked smoke from Blender; no secondary cameras or volume simulation.</summary>
 [DisallowMultipleComponent]
-public class GatePortal : MonoBehaviour
+public partial class GatePortal : MonoBehaviour
 {
     public Shader maskShader;
     public Shader worldShader;
@@ -27,7 +27,7 @@ public class GatePortal : MonoBehaviour
     GateBuilder _gate;
     Transform _root,_world,_rim,_halo,_mask,_crystal;
     Material _maskMaterial,_worldMaterial,_rimMaterial,_haloMaterial;
-    Material[] _materials;
+    readonly List<Material> _materials=new List<Material>();
     readonly List<Mesh> _meshes=new List<Mesh>();
     float _appearanceStart;
     bool _wasOpening;
@@ -82,6 +82,7 @@ public class GatePortal : MonoBehaviour
         _root.gameObject.SetActive(Reveal>.001f);
         _rim.localRotation=Quaternion.AngleAxis(now*rotationSpeed,Vector3.right);
         _halo.localRotation=Quaternion.AngleAxis(-now*rotationSpeed*.55f,Vector3.right);
+        if(_earth) _earth.localRotation=Quaternion.Euler(0,now*6,23.4f);
         if(_crystal) _crystal.localRotation=Quaternion.Euler(now*13,now*23,now*7);
         var center=(Vector4)_root.position;
         var inward=(Vector4)_root.right;
@@ -115,12 +116,23 @@ public class GatePortal : MonoBehaviour
         _rimMaterial=new Material(energyShader){name="Portal blue smoke"};
         _haloMaterial=new Material(energyShader){name="Portal soft smoke"};_haloMaterial.SetFloat("_Halo",1);
         _rimMaterial.SetTexture("_SmokeTex",smokeTexture);_haloMaterial.SetTexture("_SmokeTex",smokeTexture);
-        _materials=new[]{_maskMaterial,_worldMaterial,_rimMaterial,_haloMaterial};
+        _materials.AddRange(new[]{_maskMaterial,_worldMaterial,_rimMaterial,_haloMaterial});
         _root=new GameObject("GatePortalVisual").transform;_root.SetParent(transform,false);
         _mask=Create("ApertureMask",Disk(),_root,_maskMaterial);
         _rim=Create("RotatingSmokeCloud",SmokeCloud(),_root,_rimMaterial);
         _halo=Create("VolumetricSmokePuffs",SmokePuffs(),_root,_haloMaterial);
+        BuildWorld();
+        PlacePortal();
+    }
+
+    void BuildWorld()
+    {
         _world=new GameObject("PortalWorld").transform;_world.SetParent(_root,false);
+        _worldMaterial.SetFloat("_BakedWorld",0);
+        if(worldKind==PortalWorldKind.Earth && earthMesh && earthTexture && spaceTexture)
+        {
+            BuildEarthWorld();return;
+        }
         if(bakedWorldMesh && bakedWorldTexture)
         {
             _worldMaterial.SetFloat("_BakedWorld",1);
@@ -154,7 +166,6 @@ public class GatePortal : MonoBehaviour
         _crystal=Create("FloatingCrystal",Crystal(),_world,_worldMaterial);
         _crystal.localPosition=new Vector3(3.8f,.15f,0);
         }
-        PlacePortal();
     }
 
     Transform Create(string name,Mesh mesh,Transform parent,Material material,bool ownsMesh=true)
@@ -251,7 +262,7 @@ public class GatePortal : MonoBehaviour
     {
         if(_root) Destroy(_root.gameObject);
         foreach(var mesh in _meshes)if(mesh)Destroy(mesh);
-        foreach(var material in new[]{_maskMaterial,_worldMaterial,_rimMaterial,_haloMaterial})if(material)Destroy(material);
+        foreach(var material in _materials)if(material)Destroy(material);
     }
 
     sealed class MeshData

@@ -32,7 +32,7 @@ public static class GatePortalVerification
         var picker=gate.GetComponent<GateColorPicker>();
         var kind=gate.gateKind;float w=gate.openingWidth,h=gate.openingHeight,p=gate.Progress;
         var pos=gate.transform.position;var rot=gate.transform.rotation;var scale=gate.transform.localScale;
-        bool enabled=portal.portalEnabled;float duration=portal.appearanceDuration;
+        bool enabled=portal.portalEnabled;float duration=portal.appearanceDuration;var worldKind=portal.worldKind;
         int checks=0;
         void Check(bool condition,string name)
         {
@@ -54,7 +54,7 @@ public static class GatePortalVerification
                 "main cloud uses baked smoke");
             Check(portal.RimRoot.GetComponent<MeshFilter>().sharedMesh.bounds.size.x>.05f,
                 "smoke shell has depth");
-            if(portal.bakedWorldMesh)
+            if(portal.worldKind==GatePortal.PortalWorldKind.Loft && portal.bakedWorldMesh)
             {
                 Check(portal.bakedWorldMesh.triangles.Length/3<=350000,"loft triangle budget");
                 Check(portal.bakedWorldTexture && portal.bakedWorldTexture.width==4096,"loft baked atlas");
@@ -67,6 +67,27 @@ public static class GatePortalVerification
                     "loft uses baked stencil world shader");
                 Check(portal.WorldRoot.GetComponentsInChildren<Light>().Length==0
                     &&portal.WorldRoot.GetComponentsInChildren<Camera>().Length==0,"no additional loft lights or cameras");
+            }
+            if(portal.earthMesh)
+            {
+                var originalWorld=portal.worldKind;
+                Check(portal.earthMesh.triangles.Length/3==3968,"original Earth medium mesh");
+                Press(picker,"PortalWorldBtn");
+                Check(portal.worldKind!=originalWorld,"menu world selector");
+                Press(picker,"PortalWorldBtn");
+                Check(portal.worldKind==originalWorld,"menu returns to original world");
+                portal.SetWorldKind(GatePortal.PortalWorldKind.Loft);
+                Check(portal.WorldRoot.childCount==1 && portal.bakedWorldMesh,"loft preserved as alternative");
+                portal.SetWorldKind(GatePortal.PortalWorldKind.Earth);
+                var earth=portal.WorldRoot.Find("RotatingEarth");
+                Check(earth && portal.WorldRoot.GetComponentsInChildren<Renderer>().Length==3,"Earth, atmosphere and starfield");
+                Check(earth.GetComponentInChildren<MeshFilter>().sharedMesh==portal.earthMesh,"original Asset Store mesh reused");
+                Tick(portal,1);var earthRotation=earth.localRotation;Tick(portal,3);
+                Check(Quaternion.Angle(earthRotation,earth.localRotation)>5,"Earth rotation");
+                Check(portal.WorldRoot.GetComponentsInChildren<Light>().Length==0
+                    &&portal.WorldRoot.GetComponentsInChildren<Camera>().Length==0,"Earth uses no extra cameras or lights");
+                Check(portal.WorldRoot.GetComponentsInChildren<MeshFilter>().Sum(f=>f.sharedMesh.triangles.Length/3)<10000,
+                    "Earth scene stays below 10000 triangles");
             }
             var puffRenderer=visual.Find("VolumetricSmokePuffs").GetComponent<MeshFilter>();
             var puffCenters=new List<Vector4>();puffRenderer.sharedMesh.GetUVs(1,puffCenters);
@@ -105,14 +126,14 @@ public static class GatePortalVerification
             portal.SetPortalEnabled(true);gate.SetProgress(1);Tick(portal,20);
             Check(gate.transform.Cast<Transform>().Count(t=>t.name=="GatePortalVisual")==1,"no duplicate visual roots");
             Capture(gate,portal,Check);
-            string report="Portal: "+checks+" checks passed; stencil clipping, camera parallax, replay, resize, both gate types; 3D smoke puffs, clear center, grazing angle and baked loft.\n";
+            string report="Portal: "+checks+" checks passed; stencil clipping, camera parallax, replay, resize, both gate types; 3D smoke puffs, clear center, grazing angle and selectable Earth/Loft worlds.\n";
             File.AppendAllText("D:/blender/chatgpt/unity-maintenance-report.txt",report);Debug.Log(report);
         }
         finally
         {
             gate.StopAnimation();gate.transform.SetPositionAndRotation(pos,rot);gate.transform.localScale=scale;
             gate.SetGateType(kind);gate.Build(w,h);gate.SetProgress(p);
-            portal.appearanceDuration=duration;portal.SetPortalEnabled(enabled);Tab(picker);
+            portal.SetWorldKind(worldKind);portal.appearanceDuration=duration;portal.SetPortalEnabled(enabled);Tab(picker);
         }
     }
 
