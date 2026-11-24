@@ -43,12 +43,17 @@ public static class GatePortalVerification
         {
             Check(!ShaderUtil.ShaderHasError(portal.maskShader)&&!ShaderUtil.ShaderHasError(portal.worldShader)
                 &&!ShaderUtil.ShaderHasError(portal.energyShader),"shader compilation");
+            Check(portal.smokeTexture && portal.smokeTexture.width==1024,"serialized Blender smoke texture");
             portal.appearanceDuration=0;
             gate.StopAnimation();gate.SetWicketAngle(0);gate.Build(3.5f,2.65f);
             int cameras=Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).Length;
             Tab(picker);portal.SetPortalEnabled(false);Press(picker,"PortalToggleBtn");
             Check(portal.portalEnabled,"menu toggle");
             var visual=portal.VisualRoot;
+            Check(portal.RimRoot.GetComponent<Renderer>().sharedMaterial.GetTexture("_SmokeTex")==portal.smokeTexture,
+                "main cloud uses baked smoke");
+            Check(portal.RimRoot.GetComponent<MeshFilter>().sharedMesh.bounds.size.x>.05f,
+                "smoke shell has depth");
             foreach(var type in new[]{GateBuilder.GateKind.Sectional,GateBuilder.GateKind.Roller})
             {
                 gate.SetGateType(type);gate.SetProgress(0);Tick(portal,10);
@@ -82,7 +87,7 @@ public static class GatePortalVerification
             portal.SetPortalEnabled(true);gate.SetProgress(1);Tick(portal,20);
             Check(gate.transform.Cast<Transform>().Count(t=>t.name=="GatePortalVisual")==1,"no duplicate visual roots");
             Capture(gate,portal,Check);
-            string report="Portal: "+checks+" checks passed; stencil clipping, camera parallax, replay, resize, both gate types.\n";
+            string report="Portal: "+checks+" checks passed; stencil clipping, camera parallax, replay, resize, both gate types; baked smoke and clear center.\n";
             File.AppendAllText("D:/blender/chatgpt/unity-maintenance-report.txt",report);Debug.Log(report);
         }
         finally
@@ -135,6 +140,23 @@ public static class GatePortalVerification
                 if(Vector2.Distance(new Vector2(x+.5f,y+.5f),new Vector2(screenCenter.x,screenCenter.y))>radius+3)outside++;
             }
             check(changed>10000,"world is visible through aperture");check(outside==0,"world cannot leak outside aperture: "+outside);
+            var smoke=portal.VisualRoot.GetComponentsInChildren<Renderer>()
+                .Where(r=>r.sharedMaterial.shader==portal.energyShader).ToArray();
+            check(smoke.Length==2,"two smoke layers replace the old ring");
+            foreach(var renderer in smoke)renderer.enabled=false;
+            var noSmoke=Render(null);
+            foreach(var renderer in smoke)renderer.enabled=true;
+            int smokePixels=0,centerPixels=0;
+            for(int y=0;y<900;y++)for(int x=0;x<1000;x++)
+            {
+                int i=y*1000+x;
+                int diff=Math.Abs(full[i].r-noSmoke[i].r)+Math.Abs(full[i].g-noSmoke[i].g)+Math.Abs(full[i].b-noSmoke[i].b);
+                if(diff<=10)continue;
+                smokePixels++;
+                if(Vector2.Distance(new Vector2(x+.5f,y+.5f),new Vector2(screenCenter.x,screenCenter.y))<radius*.65f)centerPixels++;
+            }
+            check(smokePixels>5000,"baked cloud visibly replaces ring: "+smokePixels);
+            check(centerPixels==0,"cloud leaves the center clear: "+centerPixels);
             CameraAt(-.032f);var left=Render("left");CameraAt(.032f);var right=Render("right");
             int parallax=0;
             for(int y=270;y<630;y++)for(int x=320;x<680;x++)
@@ -144,6 +166,8 @@ public static class GatePortalVerification
             }
             check(parallax>100,"camera translation changes interior perspective: "+parallax);
             CameraAt(1.3f);camera.transform.LookAt(center,gate.transform.up);Render("angle");
+            camera.transform.position=center+gate.transform.TransformVector(new Vector3(-2.8f,0,.55f));
+            camera.transform.LookAt(center,gate.transform.up);Render("close");
             CameraAt(0);gate.SetProgress(.5f);Tick(portal,31);Render("half");
             gate.SetProgress(0);Tick(portal,32);Render("closed");
             gate.SetProgress(1);Tick(portal,33);

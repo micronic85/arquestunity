@@ -2,13 +2,14 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>Optional stereoscopic portal window behind either gate type. No secondary cameras or textures.</summary>
+/// <summary>Optional stereoscopic portal window behind either gate type. Baked smoke from Blender; no secondary cameras or volume simulation.</summary>
 [DisallowMultipleComponent]
 public class GatePortal : MonoBehaviour
 {
     public Shader maskShader;
     public Shader worldShader;
     public Shader energyShader;
+    public Texture2D smokeTexture;
     public bool portalEnabled;
     [Min(0)] public float appearanceDuration=.8f;
     [Range(5,90)] public float rotationSpeed=28;
@@ -104,17 +105,18 @@ public class GatePortal : MonoBehaviour
     void EnsureVisuals()
     {
         if(_root) return;
-        if(!maskShader||!worldShader||!energyShader)
-            throw new InvalidOperationException("Portal shaders are missing. Run Tools/AR Gates/Install Portal In Scene.");
+        if(!maskShader||!worldShader||!energyShader||!smokeTexture)
+            throw new InvalidOperationException("Portal shaders or baked smoke texture are missing. Run Tools/AR Gates/Install Portal In Scene.");
         _maskMaterial=new Material(maskShader){name="Portal aperture"};
         _worldMaterial=new Material(worldShader){name="Portal test world"};
-        _rimMaterial=new Material(energyShader){name="Portal blue energy"};
-        _haloMaterial=new Material(energyShader){name="Portal outer halo"};_haloMaterial.SetFloat("_Halo",1);
+        _rimMaterial=new Material(energyShader){name="Portal blue smoke"};
+        _haloMaterial=new Material(energyShader){name="Portal soft smoke"};_haloMaterial.SetFloat("_Halo",1);
+        _rimMaterial.SetTexture("_SmokeTex",smokeTexture);_haloMaterial.SetTexture("_SmokeTex",smokeTexture);
         _materials=new[]{_maskMaterial,_worldMaterial,_rimMaterial,_haloMaterial};
         _root=new GameObject("GatePortalVisual").transform;_root.SetParent(transform,false);
         _mask=Create("ApertureMask",Disk(),_root,_maskMaterial);
-        _rim=Create("RotatingEnergyRim",Torus(),_root,_rimMaterial);
-        _halo=Create("RotatingEnergyHalo",Halo(),_root,_haloMaterial);
+        _rim=Create("RotatingSmokeCloud",SmokeCloud(false),_root,_rimMaterial);
+        _halo=Create("DriftingSmokeWisps",SmokeCloud(true),_root,_haloMaterial);
         _world=new GameObject("PortalWorld").transform;_world.SetParent(_root,false);
         var room=new MeshData();
         var navy=new Color(.035f,.07f,.14f,0);var floor=new Color(.06f,.10f,.16f,0);
@@ -163,42 +165,27 @@ public class GatePortal : MonoBehaviour
         return data.Build("Portal mask disk");
     }
 
-    static Mesh Torus()
+    // Shallow curved shells give the baked smoke some thickness from oblique viewpoints.
+    // The inner aperture stays clear; the outer boundary is feathered by the smoke shader.
+    static Mesh SmokeCloud(bool wisps)
     {
-        var data=new MeshData();const int around=128,section=8;
-        for(int i=0;i<around;i++)for(int j=0;j<section;j++)
+        var data=new MeshData();const int around=128,across=12;
+        for(int i=0;i<around;i++)for(int j=0;j<across;j++)
         {
             int start=data.vertices.Count;
             for(int k=0;k<4;k++)
             {
                 int ia=i+(k==1||k==2?1:0),ja=j+(k>=2?1:0);
-                float a=ia*2*Mathf.PI/around,t=ja*2*Mathf.PI/section;
-                float radius=1+.04f*Mathf.Cos(t);
-                data.vertices.Add(new Vector3(-.025f+.04f*Mathf.Sin(t),Mathf.Sin(a)*radius,Mathf.Cos(a)*radius));
-                data.uv.Add(new Vector2((float)ia/around,(float)ja/section));data.colors.Add(Color.white);
+                float angle=ia*2*Mathf.PI/around,t=(float)ja/across;
+                float radius=Mathf.Lerp(.70f,1.28f,t);
+                float x=-.025f-(wisps?.065f:.04f)-.07f*Mathf.Sin(t*Mathf.PI);
+                data.vertices.Add(new Vector3(x,Mathf.Sin(angle)*radius,Mathf.Cos(angle)*radius));
+                data.uv.Add(new Vector2(Mathf.Cos(angle)*radius,Mathf.Sin(angle)*radius));
+                data.colors.Add(Color.white);
             }
             data.Quad(start);
         }
-        return data.Build("Portal energy torus");
-    }
-
-    static Mesh Halo()
-    {
-        var data=new MeshData();const int n=128;
-        for(int i=0;i<n;i++)
-        {
-            int start=data.vertices.Count;
-            for(int k=0;k<4;k++)
-            {
-                int ia=i+(k==1||k==2?1:0);float v=k>=2?1:0;
-                float a=ia*2*Mathf.PI/n,radius=Mathf.Lerp(.97f,1.25f,v);
-                radius+=v*.03f*Mathf.Sin(a*7);
-                data.vertices.Add(new Vector3(-.05f,Mathf.Sin(a)*radius,Mathf.Cos(a)*radius));
-                data.uv.Add(new Vector2((float)ia/n,v));data.colors.Add(Color.white);
-            }
-            data.Quad(start);
-        }
-        return data.Build("Portal energy halo");
+        return data.Build(wisps?"Portal smoke wisps":"Portal curved smoke cloud");
     }
 
     static Mesh Crystal()
