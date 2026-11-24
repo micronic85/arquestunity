@@ -4,6 +4,8 @@ Shader "VorotaKraft/PortalWorld"
     {
         _BaseMap("Baked world lighting",2D)="white" {}
         _BakedWorld("World shading mode",Float)=0
+        [HideInInspector] _PortalSunPosition("Sun world position",Vector)=(2,6,-12,0)
+        [HideInInspector] _SunAngularRadius("Sun angular radius",Float)=.025
         [HideInInspector] _ZWrite("Depth write",Float)=1
         _PortalCompare("Portal stencil comparison",Float)=3
         [HideInInspector] _PortalTravel("Travel enabled",Float)=0
@@ -49,25 +51,44 @@ Shader "VorotaKraft/PortalWorld"
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);PortalClipWorld(input.positionWS);
                 if(_BakedWorld>.5 && _BakedWorld<1.5)
-                    return half4(SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,input.uv).rgb,_Reveal);
+                {
+                    half3 background=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,input.uv).rgb;
+                    // Only Earth's starfield has a sun; the baked loft uses this mode too.
+                    if(_SunAngularRadius>.001)
+                    {
+                        float3 eye=GetCameraPositionWS();
+                        float3 ray=normalize(input.positionWS-eye);
+                        float3 toSun=normalize(_PortalSunPosition.xyz-eye);
+                        float angle=length(ray-toSun);
+                        float r=_SunAngularRadius;
+                        float aa=max(fwidth(angle),.0003);
+                        half disk=1-smoothstep(r-aa,r+aa,angle);
+                        half halo=exp(-angle*angle/(r*r*8))*.38;
+                        half corona=exp(-max(0,angle-r)/(r*.6))*.25;
+                        background=lerp(background,half3(1,.95,.78),disk);
+                        background+=half3(1,.55,.16)*(halo+corona)*(1-disk);
+                    }
+                    return half4(background,_Reveal);
+                }
                 if(_BakedWorld>1.5)
                 {
                     float3 n=normalize(input.normalWS);
                     float3 view=normalize(GetCameraPositionWS()-input.positionWS);
+                    float3 sun=normalize(_PortalSunPosition.xyz-input.positionWS);
+                    half sunFacing=dot(n,sun);
                     if(_BakedWorld>2.5)
                     {
                         clip(front?1:-1);
-                        half glow=pow(1-saturate(dot(n,view)),3.5)*.65*_Reveal;
+                        half daylight=smoothstep(-.15,.35,sunFacing);
+                        half glow=pow(1-saturate(dot(n,view)),3.5)*lerp(.10,.65,daylight)*_Reveal;
                         clip(glow-.003);
                         return half4(.05,.40,1.0,glow);
                     }
-                    float3 up=float3(0,1,0);
-                    float3 side=normalize(cross(up,_PortalInward.xyz));
-                    float3 sun=normalize(-_PortalInward.xyz*.65+up*.4+side*.6);
                     half3 surface=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,input.uv).rgb;
-                    half diffuse=.10+.95*saturate(dot(n,sun));
+                    half daylight=smoothstep(-.08,.12,sunFacing);
+                    half diffuse=.025+1.05*saturate(sunFacing)*daylight;
                     half water=saturate((surface.b-surface.r)*4);
-                    half spec=pow(saturate(dot(reflect(-sun,n),view)),40)*water*.18;
+                    half spec=pow(saturate(dot(reflect(-sun,n),view)),40)*water*.18*daylight;
                     return half4(surface*diffuse+spec,_Reveal);
                 }
                 float3 normal=normalize(input.normalWS)*(front?1:-1);

@@ -5,6 +5,8 @@
 CBUFFER_START(UnityPerMaterial)
     float4 _PortalCenter;
     float4 _PortalInward;
+    float4 _PortalSunPosition;
+    float _SunAngularRadius;
     float _Reveal;
     float _ForegroundOffset;
     float _Halo;

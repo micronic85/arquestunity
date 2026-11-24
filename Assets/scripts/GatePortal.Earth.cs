@@ -6,7 +6,22 @@ public partial class GatePortal
     public PortalWorldKind worldKind;
     public Mesh earthMesh;
     public Texture2D earthTexture,spaceTexture;
+    [Header("Солнце в космосе")]
+    public Vector3 sunLocalPosition=new Vector3(2,6,-12);
+    [Range(.005f,.08f)] public float sunAngularRadius=.025f;
+    public Vector3 SunWorldPosition=>_world?_world.TransformPoint(sunLocalPosition):transform.position;
     Transform _earth;
+
+    void UpdateEarthSun()
+    {
+        if(!_earth || !_world)return;
+        SetSun(_worldMaterial);SetSun(_earthMaterial);SetSun(_atmosphereMaterial);
+        void SetSun(Material material)
+        {
+            material.SetVector("_PortalSunPosition",(Vector4)SunWorldPosition);
+            material.SetFloat("_SunAngularRadius",Mathf.Clamp(sunAngularRadius,.005f,.08f));
+        }
+    }
     Material _earthMaterial,_atmosphereMaterial;
 
     public void SetWorldKind(PortalWorldKind kind)

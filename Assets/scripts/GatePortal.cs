@@ -90,7 +90,7 @@ public partial class GatePortal : MonoBehaviour
         _root.gameObject.SetActive(Reveal>.001f);
         _rim.localRotation=Quaternion.AngleAxis(now*rotationSpeed,Vector3.right);
         _halo.localRotation=Quaternion.AngleAxis(-now*rotationSpeed*.55f,Vector3.right);
-        UpdateEarthAnimation(now);
+        UpdateEarthAnimation(now);UpdateEarthSun();
         if(_crystal) _crystal.localRotation=Quaternion.Euler(now*13,now*23,now*7);
         var center=(Vector4)_root.position;
         var inward=(Vector4)_root.right;
@@ -137,7 +137,7 @@ public partial class GatePortal : MonoBehaviour
     void BuildWorld()
     {
         _world=new GameObject("PortalWorld").transform;_world.SetParent(_root,false);
-        _worldMaterial.SetFloat("_BakedWorld",0);
+        _worldMaterial.SetFloat("_BakedWorld",0);_worldMaterial.SetFloat("_SunAngularRadius",0);
         if(worldKind==PortalWorldKind.Earth && earthMesh && earthTexture && spaceTexture)
         {
             BuildEarthWorld();return;
