@@ -8,7 +8,7 @@ public partial class GatePortal
     public Texture2D earthTexture,spaceTexture;
     [Header("Солнце в космосе")]
     public Vector3 sunLocalPosition=new Vector3(2,6,-12);
-    [Range(.005f,.08f)] public float sunAngularRadius=.025f;
+    [Range(.005f,.08f)] public float sunAngularRadius=.009f;
     public Vector3 SunWorldPosition=>_world?_world.TransformPoint(sunLocalPosition):transform.position;
     Transform _earth;
 

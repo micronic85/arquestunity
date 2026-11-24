@@ -64,7 +64,7 @@ public static class PortalSunVerification
             Check(day.grayscale>night.grayscale*4,"day is visibly brighter than night from fixed viewpoint");
             portal.sunLocalPosition=sun;Tick();InsideMaterials();
             camera.transform.position=portal.VisualRoot.position+portal.VisualRoot.right*.15f;
-            camera.transform.LookAt(portal.SunWorldPosition,Vector3.up);var disk=Render("distant_sun");
+            camera.transform.LookAt(portal.SunWorldPosition,Vector3.up);Render("distant_sun");var disk=image.GetPixel(256,256);
             Check(disk.r>.85f && disk.g>.7f,"visible bright sun disk at actual light position");
             camera.transform.LookAt(portal.EarthTransform.position,Vector3.up);Render("earth_with_sunlight");
             portal.SetWorldKind(GatePortal.PortalWorldKind.Loft);Tick();

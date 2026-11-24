@@ -211,7 +211,8 @@ public partial class GatePortal : MonoBehaviour
                 int ia=i+(k==1||k==2?1:0),ja=j+(k>=2?1:0);
                 float angle=ia*2*Mathf.PI/around,t=(float)ja/across;
                 float radius=Mathf.Lerp(.70f,1.28f,t);
-                float x=-.015f+.16f*Mathf.Sin(t*Mathf.PI);
+                float x=-.015f+.16f*Mathf.Sin(t*Mathf.PI)
+                    +.035f*Mathf.Sin(angle*5)+.02f*Mathf.Sin(angle*9+t*Mathf.PI);
                 data.vertices.Add(new Vector3(x,Mathf.Sin(angle)*radius,Mathf.Cos(angle)*radius));
                 data.uv.Add(new Vector2(Mathf.Cos(angle)*radius,Mathf.Sin(angle)*radius));
                 data.colors.Add(Color.white);
@@ -221,8 +222,8 @@ public partial class GatePortal : MonoBehaviour
         return data.Build("Portal curved smoke cloud");
     }
 
-    // Centers occupy three rings at different depths. The shader faces each soft puff towards
-    // the current XR eye, so the body keeps its thickness even when seen almost edge-on.
+    // Puffs straddle the mounting plane instead of sitting behind a thin front sheet.
+    // Their depth overlaps the curved body, hiding its edge from both sides in stereo.
     static Mesh SmokePuffs()
     {
         var vertices=new List<Vector3>();var uv=new List<Vector2>();
@@ -233,7 +234,7 @@ public partial class GatePortal : MonoBehaviour
             float phase=Mathf.Repeat(i*.618034f+layer*.37f,1);
             float angle=(i+layer*.37f)*2*Mathf.PI/around;
             float radius=1.035f+.035f*Mathf.Sin(angle*7+layer);
-            float depth=.38f+(layer-1)*.13f+.035f*Mathf.Sin(angle*5+layer);
+            float depth=.06f+(layer-1)*.24f+.05f*Mathf.Sin(angle*5+layer);
             var center=new Vector3(depth,Mathf.Sin(angle)*radius,Mathf.Cos(angle)*radius);
             float size=Mathf.Lerp(.16f,.225f,phase);
             int start=vertices.Count;
@@ -250,7 +251,7 @@ public partial class GatePortal : MonoBehaviour
         mesh.SetVertices(vertices);mesh.SetUVs(0,uv);mesh.SetUVs(1,centers);mesh.SetColors(colors);
         mesh.SetTriangles(triangles,0);
         // Bounds include the camera-facing expansion in every direction.
-        mesh.bounds=new Bounds(new Vector3(.38f,0,0),new Vector3(1.1f,2.7f,2.7f));
+        mesh.bounds=new Bounds(new Vector3(.06f,0,0),new Vector3(1.2f,2.7f,2.7f));
         return mesh;
     }
 

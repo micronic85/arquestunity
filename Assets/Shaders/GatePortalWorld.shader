@@ -5,7 +5,7 @@ Shader "VorotaKraft/PortalWorld"
         _BaseMap("Baked world lighting",2D)="white" {}
         _BakedWorld("World shading mode",Float)=0
         [HideInInspector] _PortalSunPosition("Sun world position",Vector)=(2,6,-12,0)
-        [HideInInspector] _SunAngularRadius("Sun angular radius",Float)=.025
+        [HideInInspector] _SunAngularRadius("Sun angular radius",Float)=.009
         [HideInInspector] _ZWrite("Depth write",Float)=1
         _PortalCompare("Portal stencil comparison",Float)=3
         [HideInInspector] _PortalTravel("Travel enabled",Float)=0

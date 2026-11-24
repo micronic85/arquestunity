@@ -85,7 +85,11 @@ Shader "VorotaKraft/PortalEnergy"
                     float2 uv=.5+float2(cos(angle),sin(angle))*r*.5;
                     detail=saturate(SAMPLE_TEXTURE2D(_SmokeTex,sampler_SmokeTex,uv).r*3.3);
                     half pulse=.92+.08*sin(_Time.y*1.3+angle*3);
-                    alpha=pow(detail,.8)*feather*pulse*_Reveal*.68;
+                    // The textured support sheet should disappear at grazing angles;
+                    // the puffs supply the silhouette and depth there.
+                    float facing=abs(dot(normalize(GetCameraPositionWS()-input.positionWS),normalize(_PortalInward.xyz)));
+                    half sheetFade=smoothstep(.12,.65,facing);
+                    alpha=pow(detail,.8)*feather*pulse*_Reveal*.60*sheetFade;
                     color=lerp(half3(.015,.10,.32),half3(.25,.75,1.2),sqrt(detail));
                 }
                 alpha*=PortalForegroundVisibility(input.positionWS);

@@ -93,7 +93,8 @@ public static class GatePortalVerification
             var puffRenderer=visual.Find("VolumetricSmokePuffs").GetComponent<MeshFilter>();
             var puffCenters=new List<Vector4>();puffRenderer.sharedMesh.GetUVs(1,puffCenters);
             Check(puffCenters.Count==96*4,"96 smoke puffs use one mesh");
-            Check(puffCenters.Max(c=>c.x)-puffCenters.Min(c=>c.x)>.30f,"puff centers occupy real depth");
+            Check(puffCenters.Max(c=>c.x)-puffCenters.Min(c=>c.x)>.50f,"puff centers occupy real depth");
+            Check(puffCenters.Min(c=>c.x)<-.15f && puffCenters.Max(c=>c.x)>.25f,"smoke overlaps both sides of support sheet");
             foreach(var type in new[]{GateBuilder.GateKind.Sectional,GateBuilder.GateKind.Roller})
             {
                 gate.SetGateType(type);gate.SetProgress(0);Tick(portal,10);
